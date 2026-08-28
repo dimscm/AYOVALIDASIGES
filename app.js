@@ -418,9 +418,16 @@
     }
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      const open = !menu.hidden;
-      menu.hidden = open;
-      wrap.classList.toggle("open", !open);
+      const willOpen = menu.hidden;
+      document.querySelectorAll(".multi.open").forEach((el) => {
+        if (el !== wrap) {
+          el.classList.remove("open");
+          const m = el.querySelector(".multi-menu");
+          if (m) m.hidden = true;
+        }
+      });
+      menu.hidden = !willOpen;
+      wrap.classList.toggle("open", willOpen);
     });
     document.addEventListener("click", (e) => {
       if (!wrap.contains(e.target)) { menu.hidden = true; wrap.classList.remove("open"); }
