@@ -102,15 +102,22 @@
       <h2 style="margin-top: 24px;">Detail</h2>
       <div class="toolbar">
         <input type="search" id="search" placeholder="Cari nama toko, salesman, kode outlet, rayon..." />
-        <select id="filterCategory">
-          <option value="">Semua kategori</option>
-          <option value="1-SCAN">FLAG 1 (IN RADIUS), TP SCAN</option>
-          <option value="1-NOSCAN">FLAG 1 (IN RADIUS), TDK SCAN</option>
-          <option value="0-SCAN">FLAG 0 (OUT RADIUS), TP SCAN</option>
-          <option value="0-NOSCAN">FLAG 0 (OUT RADIUS), TDK SCAN</option>
-          <option value="BLANK-SCAN">FLAG BLANK, TP SCAN</option>
-          <option value="BLANK-NOSCAN">FLAG BLANK, TDK SCAN</option>
-        </select>
+        <div class="multi" id="filterCategory">
+          <button type="button" class="multi-btn" id="filterCategoryBtn">
+            <span id="filterCategoryLabel">Semua kategori</span>
+            <span class="chev">▾</span>
+          </button>
+          <div class="multi-menu" id="filterCategoryMenu" hidden>
+            <label class="multi-opt all"><input type="checkbox" id="filterCategoryAll" checked /> Semua kategori</label>
+            <div class="multi-sep"></div>
+            <label class="multi-opt"><input type="checkbox" value="1-SCAN" class="filterCategoryItem" /> FLAG 1 (IN RADIUS), TP SCAN</label>
+            <label class="multi-opt"><input type="checkbox" value="1-NOSCAN" class="filterCategoryItem" /> FLAG 1 (IN RADIUS), TDK SCAN</label>
+            <label class="multi-opt"><input type="checkbox" value="0-SCAN" class="filterCategoryItem" /> FLAG 0 (OUT RADIUS), TP SCAN</label>
+            <label class="multi-opt"><input type="checkbox" value="0-NOSCAN" class="filterCategoryItem" /> FLAG 0 (OUT RADIUS), TDK SCAN</label>
+            <label class="multi-opt"><input type="checkbox" value="BLANK-SCAN" class="filterCategoryItem" /> FLAG BLANK, TP SCAN</label>
+            <label class="multi-opt"><input type="checkbox" value="BLANK-NOSCAN" class="filterCategoryItem" /> FLAG BLANK, TDK SCAN</label>
+          </div>
+        </div>
         <select id="filterSalesman"><option value="">Semua salesman</option></select>
         <button id="exportBtn" class="ghost">Export Excel</button>
         <span id="countInfo" class="count"></span>

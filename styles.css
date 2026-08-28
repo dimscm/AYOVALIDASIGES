@@ -130,6 +130,31 @@ button.ghost:hover:not(:disabled) { background: #f3f4f6; }
 .stat.bad { border-left-color: var(--bad); }
 .stat.info { border-left-color: var(--info); }
 
+.multi { position: relative; display: inline-block; }
+.multi-btn {
+  padding: 7px 28px 7px 10px; border: 1px solid var(--line); border-radius: 6px;
+  background: #fff; font-size: 13px; color: var(--ink); cursor: pointer;
+  position: relative; text-align: left; min-width: 180px;
+}
+.multi-btn:hover { border-color: var(--muted); }
+.multi-btn .chev { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 10px; }
+.multi-menu {
+  position: absolute; top: calc(100% + 4px); left: 0; z-index: 20;
+  background: #fff; border: 1px solid var(--line); border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.10);
+  min-width: 260px; padding: 4px; max-height: 320px; overflow-y: auto;
+}
+.multi-opt {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px; font-size: 13px; cursor: pointer; border-radius: 4px;
+  color: var(--ink);
+}
+.multi-opt:hover { background: #f3f4f6; }
+.multi-opt input[type=checkbox] { margin: 0; }
+.multi-opt.all { font-weight: 500; }
+.multi-sep { border-top: 1px solid var(--line); margin: 4px 0; }
+.multi.open .chev { transform: translateY(-50%) rotate(180deg); }
+
 .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; }
 .toolbar input, .toolbar select {
   padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px;

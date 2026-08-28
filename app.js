@@ -243,6 +243,9 @@
     $("ediFile").value = ""; $("hhtFile").value = "";
     $("ediName").textContent = "Belum ada file"; $("hhtName").textContent = "Belum ada file";
     $("resultSection").classList.add("hidden");
+    document.querySelectorAll(".filterCategoryItem").forEach((c) => (c.checked = false));
+    const catAll = $("filterCategoryAll"); if (catAll) catAll.checked = true;
+    const catLabel = $("filterCategoryLabel"); if (catLabel) catLabel.textContent = "Semua kategori";
     setStatus("");
     toggleProcess();
   });
@@ -317,12 +320,18 @@
     return `<div class="stat ${tone || ""}"><b>${value}</b><span>${escapeHtml(label)}</span></div>`;
   }
 
+  function getSelectedCategories() {
+    const items = document.querySelectorAll(".filterCategoryItem");
+    const on = [...items].filter((c) => c.checked).map((c) => c.value);
+    return new Set(on);
+  }
+
   function applyFilters() {
     const q = $("search").value.trim().toLowerCase();
-    const cat = $("filterCategory").value;
+    const cats = getSelectedCategories();
     const sm = $("filterSalesman").value;
     state.filtered = state.results.filter((r) => {
-      if (cat && r.category !== cat) return false;
+      if (cats.size > 0 && !cats.has(r.category)) return false;
       if (sm && r.slsname !== sm) return false;
       if (q) {
         const hay = [
@@ -378,8 +387,59 @@
   }
 
   $("search").addEventListener("input", debounce(applyFilters, 200));
-  $("filterCategory").addEventListener("change", applyFilters);
   $("filterSalesman").addEventListener("change", applyFilters);
+
+  // Multi-select category filter
+  const catWrap = $("filterCategory");
+  const catBtn = $("filterCategoryBtn");
+  const catMenu = $("filterCategoryMenu");
+  const catAll = $("filterCategoryAll");
+  const catItems = () => document.querySelectorAll(".filterCategoryItem");
+
+  function updateCategoryLabel() {
+    const items = [...catItems()];
+    const on = items.filter((c) => c.checked);
+    const label = $("filterCategoryLabel");
+    if (on.length === 0 || on.length === items.length) {
+      label.textContent = "Semua kategori";
+      catAll.checked = true;
+    } else if (on.length === 1) {
+      label.textContent = on[0].parentElement.textContent.trim();
+      catAll.checked = false;
+    } else {
+      label.textContent = `${on.length} kategori dipilih`;
+      catAll.checked = false;
+    }
+  }
+
+  catBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const open = !catMenu.hidden;
+    catMenu.hidden = open;
+    catWrap.classList.toggle("open", !open);
+  });
+  document.addEventListener("click", (e) => {
+    if (!catWrap.contains(e.target)) {
+      catMenu.hidden = true;
+      catWrap.classList.remove("open");
+    }
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      catMenu.hidden = true;
+      catWrap.classList.remove("open");
+    }
+  });
+  catAll.addEventListener("change", () => {
+    catItems().forEach((c) => (c.checked = false));
+    catAll.checked = true;
+    updateCategoryLabel();
+    applyFilters();
+  });
+  catItems().forEach((c) => c.addEventListener("change", () => {
+    updateCategoryLabel();
+    applyFilters();
+  }));
   $("prevPage").addEventListener("click", () => { if (state.page > 1) { state.page--; renderTable(); } });
   $("nextPage").addEventListener("click", () => { state.page++; renderTable(); });
 
