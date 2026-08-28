@@ -162,11 +162,12 @@ button.ghost:hover:not(:disabled) { background: #f3f4f6; }
 .multi.open .chev { transform: translateY(-50%) rotate(180deg); }
 
 .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; }
-.toolbar input, .toolbar select {
+.toolbar > input, .toolbar > select {
   padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px;
   background: #fff;
 }
-.toolbar input { flex: 1; min-width: 200px; }
+.toolbar > input { flex: 1; min-width: 200px; }
+.multi-opt input[type=checkbox] { flex: 0 0 auto; margin: 0; width: auto; }
 .count { margin-left: auto; color: var(--muted); font-size: 12px; }
 
 .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
