@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ayo Validasi GES - Cek Kriteria Flag Radius</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23c8102e'/%3E%3Ctext x='50' y='62' font-size='34' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EGES%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">GES</div>
+      <div>
+        <h1>Ayo Validasi GES</h1>
+        <p class="sub">Cek Flag Radius &amp; Scan berdasarkan EDI + HHT</p>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Kriteria -->
+    <section class="card">
+      <h2>CARA CEK</h2>
+      <div class="criteria-grid">
+        <div class="crit crit-blank-scan">
+          <h3>FLAG BLANK, TP SCAN</h3>
+          <p>Belum ada validasi, barcode sudah ada.</p>
+          <p class="solusi"><b>SOLUSI:</b> Scan barcode = validasi</p>
+        </div>
+        <div class="crit crit-blank-noscan">
+          <h3>FLAG BLANK, TDK SCAN</h3>
+          <p>Toko tidak ada / tidak ketemu.</p>
+        </div>
+        <div class="crit crit-0-scan">
+          <h3>FLAG 0 (OUT RADIUS), TP SCAN</h3>
+          <p>Kunjungi tapi validasi salah, atau fiktif barcode.</p>
+        </div>
+        <div class="crit crit-0-noscan">
+          <h3>FLAG 0 (OUT RADIUS), TDK SCAN</h3>
+          <p>Kemungkinan besar tidak dikunjungi, atau kunjungan tapi validasi salah.</p>
+        </div>
+        <div class="crit crit-1-scan best">
+          <h3>FLAG 1 (IN RADIUS), TP SCAN</h3>
+          <p><b>INI PALING VALID</b></p>
+        </div>
+        <div class="crit crit-1-noscan">
+          <h3>FLAG 1 (IN RADIUS), TDK SCAN</h3>
+          <p>Kemungkinan tidak barcode.</p>
+        </div>
+      </div>
+
+      <details class="steps">
+        <summary>Langkah kerja &amp; permintaan data</summary>
+        <ol>
+          <li>Masing-masing SS tarik EDI Flag Visit Radius di Matriks, minta sama SA.</li>
+          <li>Tambahkan Nama Toko, Alamat Toko, Rayon, Cycle, HHT.</li>
+          <li>SS filter Flag BLANK &amp; 0 → belum validasi dan out radius.</li>
+          <li>Cocokan LongLat Validasi, LongLat Last Visit, dan Alamat Toko.</li>
+          <li>Validasi salah &amp; last visit juga salah → validasi ulang. Kalau last visit benar → Atribut 4.</li>
+          <li>Validasi benar tapi last visit salah (sales tidak kunjungi, order by phone) → orderan by FPB KPL, jangan input SFA.</li>
+          <li>Permintaan data: LongLat Last Visit, LongLat Validasi, Kode Outlet, Nama Toko, Alamat Toko, Nama Salesman, Rayon, Cycle, HHT/Scan, Jam Masuk, Jam Keluar, Flag Radius, Alor Reason.</li>
+        </ol>
+      </details>
+    </section>
+
+    <!-- Upload -->
+    <section class="card">
+      <h2>Upload File</h2>
+      <div class="uploads">
+        <label class="drop">
+          <input type="file" id="ediFile" accept=".xlsx,.xls" />
+          <div>
+            <b>EDI Flag Radius</b>
+            <p>File Excel dari Matriks (kolom: FLAG RADIUS, CUSTNO, dst.)</p>
+            <p class="filename" id="ediName">Belum ada file</p>
+          </div>
+        </label>
+
+        <label class="drop">
+          <input type="file" id="hhtFile" accept=".xlsx,.xls" />
+          <div>
+            <b>HHT / Scan (opsional)</b>
+            <p>File Excel monitoring HHT untuk cek TP SCAN / TDK SCAN.</p>
+            <p class="filename" id="hhtName">Belum ada file</p>
+          </div>
+        </label>
+      </div>
+
+      <div class="actions">
+        <button id="processBtn" disabled>Proses</button>
+        <button id="resetBtn" class="ghost">Reset</button>
+        <span id="status" class="status"></span>
+      </div>
+    </section>
+
+    <!-- Hasil -->
+    <section class="card hidden" id="resultSection">
+      <h2>Ringkasan</h2>
+      <div class="summary" id="summary"></div>
+
+      <h2 style="margin-top: 24px;">Detail</h2>
+      <div class="toolbar">
+        <input type="search" id="search" placeholder="Cari nama toko, salesman, kode outlet, rayon..." />
+        <select id="filterCategory">
+          <option value="">Semua kategori</option>
+          <option value="1-SCAN">FLAG 1 (IN RADIUS), TP SCAN</option>
+          <option value="1-NOSCAN">FLAG 1 (IN RADIUS), TDK SCAN</option>
+          <option value="0-SCAN">FLAG 0 (OUT RADIUS), TP SCAN</option>
+          <option value="0-NOSCAN">FLAG 0 (OUT RADIUS), TDK SCAN</option>
+          <option value="BLANK-SCAN">FLAG BLANK, TP SCAN</option>
+          <option value="BLANK-NOSCAN">FLAG BLANK, TDK SCAN</option>
+        </select>
+        <select id="filterSalesman"><option value="">Semua salesman</option></select>
+        <button id="exportBtn" class="ghost">Export Excel</button>
+        <span id="countInfo" class="count"></span>
+      </div>
+
+      <div class="table-wrap">
+        <table id="resultTable">
+          <thead>
+            <tr>
+              <th>Kategori</th>
+              <th>Kode Outlet</th>
+              <th>Nama Toko</th>
+              <th>Salesman</th>
+              <th>Rayon (Team)</th>
+              <th>Cycle</th>
+              <th>Visit Date</th>
+              <th>Jam Masuk</th>
+              <th>Jam Keluar</th>
+              <th>Flag Radius</th>
+              <th>Distance</th>
+              <th>HHT / Tipe Scan</th>
+              <th>Alor Reason</th>
+              <th>Saran</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="pager">
+        <button id="prevPage" class="ghost">&larr; Prev</button>
+        <span id="pageInfo"></span>
+        <button id="nextPage" class="ghost">Next &rarr;</button>
+      </div>
+    </section>
+
+    <p class="foot">Dibuat untuk tim validasi. Semua pemrosesan berjalan lokal di browser Anda — file tidak diunggah ke server.</p>
+  </main>
+
+  <script src="vendor/xlsx.full.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
