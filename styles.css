@@ -186,6 +186,23 @@ button.ghost:hover:not(:disabled) { background: #f3f4f6; }
 .cons-PROBLEM  { background: #fee2e2; color: #991b1b; }
 .cons-MIXED    { background: #fed7aa; color: #9a3412; }
 .cons-SINGLE   { background: #f3f4f6; color: #6b7280; font-weight: 500; }
+
+.sub-h { font-size: 14px; margin: 18px 0 4px; font-weight: 600; }
+.sub-desc { font-size: 13px; color: var(--muted); margin: 0 0 10px; }
+.crit-cons-valid   { border-left-color: var(--ok); background: #ecfdf5; }
+.crit-cons-problem { border-left-color: var(--bad); background: #fef2f2; }
+.crit-cons-mixed   { border-left-color: var(--warn); background: #fff7ed; }
+.crit-cons-single  { border-left-color: #9ca3af; }
+
+.ver { display: inline-block; margin-left: 8px; padding: 1px 6px;
+  background: #f3f4f6; color: var(--muted); border-radius: 4px;
+  font-family: ui-monospace, monospace; font-size: 10px; font-weight: 500; }
+
+.multi-opt.all {
+  font-weight: 500; color: var(--primary);
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 8px; margin-bottom: 2px;
+}
 .count { margin-left: auto; color: var(--muted); font-size: 12px; }
 
 .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Ayo Validasi GES - Cek Kriteria Flag Radius</title>
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=6" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23c8102e'/%3E%3Ctext x='50' y='62' font-size='34' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EGES%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -47,6 +47,27 @@
         <div class="crit crit-1-noscan">
           <h3>FLAG 1 (IN RADIUS), TDK SCAN</h3>
           <p>Kemungkinan tidak barcode.</p>
+        </div>
+      </div>
+
+      <h3 class="sub-h">Konsistensi per outlet</h3>
+      <p class="sub-desc">Outlet yang dikunjungi lebih dari sekali dinilai konsistensinya berdasarkan Flag Radius seluruh kunjungan. Tag ini muncul di kolom <b>Konsistensi</b> tabel.</p>
+      <div class="criteria-grid">
+        <div class="crit crit-cons-valid">
+          <h3>Konsisten Valid</h3>
+          <p>Semua kunjungan outlet ini <b>Flag = 1 (IN RADIUS)</b>. Tidak ada aksi.</p>
+        </div>
+        <div class="crit crit-cons-problem">
+          <h3>Konsisten Bermasalah</h3>
+          <p>Semua kunjungan outlet ini <b>Flag = 0 (OUT RADIUS) atau BLANK</b>. Perlu revalidasi.</p>
+        </div>
+        <div class="crit crit-cons-mixed">
+          <h3>⚠ Inkonsisten</h3>
+          <p>Kadang <b>IN RADIUS</b>, kadang <b>OUT RADIUS / BLANK</b> di outlet yang sama. Sinyal: koordinat borderline / validasi salah / sales tidak konsisten. <b>Prioritas investigasi.</b></p>
+        </div>
+        <div class="crit crit-cons-single">
+          <h3>1 kunjungan</h3>
+          <p>Outlet baru dikunjungi sekali di periode ini — konsistensi belum bisa dinilai.</p>
         </div>
       </div>
 
@@ -108,7 +129,7 @@
             <span class="chev">▾</span>
           </button>
           <div class="multi-menu" id="filterCategoryMenu" hidden>
-            <label class="multi-opt all"><input type="checkbox" id="filterCategoryAll" checked /> Semua kategori</label>
+            <label class="multi-opt all" title="Klik untuk reset — kembali ke semua kategori"><input type="checkbox" id="filterCategoryAll" checked /> ↺ Semua kategori (reset)</label>
             <div class="multi-sep"></div>
             <label class="multi-opt"><input type="checkbox" value="1-SCAN" class="filterCategoryItem" /> FLAG 1 (IN RADIUS), TP SCAN</label>
             <label class="multi-opt"><input type="checkbox" value="1-NOSCAN" class="filterCategoryItem" /> FLAG 1 (IN RADIUS), TDK SCAN</label>
@@ -125,7 +146,7 @@
           </button>
           <div class="multi-menu wide" id="filterSalesmanMenu" hidden>
             <input type="search" id="filterSalesmanSearch" class="multi-search" placeholder="Cari salesman..." />
-            <label class="multi-opt all"><input type="checkbox" id="filterSalesmanAll" checked /> Semua salesman</label>
+            <label class="multi-opt all" title="Klik untuk reset — kembali ke semua salesman"><input type="checkbox" id="filterSalesmanAll" checked /> ↺ Semua salesman (reset)</label>
             <div class="multi-sep"></div>
             <div id="filterSalesmanList"></div>
           </div>
@@ -169,10 +190,10 @@
       </div>
     </section>
 
-    <p class="foot">Dibuat untuk tim validasi. Semua pemrosesan berjalan lokal di browser Anda — file tidak diunggah ke server.</p>
+    <p class="foot">Dibuat untuk tim validasi. Semua pemrosesan berjalan lokal di browser Anda — file tidak diunggah ke server. <span class="ver">v6</span></p>
   </main>
 
   <script src="vendor/xlsx.full.min.js"></script>
-  <script src="app.js"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>
