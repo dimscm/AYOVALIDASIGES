@@ -130,6 +130,10 @@
             <div id="filterSalesmanList"></div>
           </div>
         </div>
+        <label class="check-toggle" title="Hanya tampilkan outlet yang punya kunjungan dengan flag radius berbeda (kadang IN, kadang OUT/BLANK)">
+          <input type="checkbox" id="filterInkonsisten" />
+          <span>Hanya outlet inkonsisten</span>
+        </label>
         <button id="exportBtn" class="ghost">Export Excel</button>
         <span id="countInfo" class="count"></span>
       </div>
@@ -139,6 +143,7 @@
           <thead>
             <tr>
               <th>Kategori</th>
+              <th>Konsistensi</th>
               <th>Kode Outlet</th>
               <th>Nama Toko</th>
               <th>Salesman</th>

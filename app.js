@@ -19,6 +19,13 @@
     "BLANK-NOSCAN": { label: "FLAG BLANK, TDK SCAN",              tone: "bad",  suggest: "Toko tidak ada / tidak ketemu. Cek ulang keberadaan toko." },
   };
 
+  const CONSISTENCY_INFO = {
+    "SINGLE":  { label: "1 kunjungan",       hint: "Outlet hanya dikunjungi sekali di periode ini — konsistensi tidak dapat dinilai." },
+    "VALID":   { label: "Konsisten Valid",   hint: "Semua kunjungan outlet ini IN RADIUS." },
+    "PROBLEM": { label: "Konsisten Bermasalah", hint: "Semua kunjungan outlet ini OUT RADIUS atau belum validasi." },
+    "MIXED":   { label: "⚠ Inkonsisten",     hint: "Kadang IN, kadang OUT/BLANK. Prioritas investigasi — cek koordinat, atau kunjungan salah." },
+  };
+
   // Header aliases per column (uppercase compare, trimmed).
   const EDI_MAP = {
     kodeCabang:  ["KODE CABANG"],
@@ -251,6 +258,7 @@
     const smLabel = $("filterSalesmanLabel"); if (smLabel) smLabel.textContent = "Semua salesman";
     const sSearch = $("filterSalesmanSearch"); if (sSearch) sSearch.value = "";
     $("search").value = "";
+    const inkon = $("filterInkonsisten"); if (inkon) inkon.checked = false;
     setStatus("");
     toggleProcess();
   });
@@ -284,6 +292,26 @@
         const cat = categorize(r, hht);
         return { ...r, hht, category: cat };
       });
+
+      // Consistency per outlet: bandingkan semua kunjungan outlet yang sama.
+      const byOutlet = new Map();
+      for (const r of results) {
+        if (!byOutlet.has(r.custno)) byOutlet.set(r.custno, []);
+        byOutlet.get(r.custno).push(r);
+      }
+      for (const [custno, visits] of byOutlet) {
+        let key;
+        if (visits.length === 1) key = "SINGLE";
+        else {
+          const flags = new Set(visits.map((v) => v.flagRadius || ""));
+          const has1 = flags.has("1");
+          const hasBad = flags.has("0") || flags.has("");
+          if (has1 && hasBad) key = "MIXED";
+          else if (has1) key = "VALID";
+          else key = "PROBLEM";
+        }
+        for (const v of visits) { v.consistency = key; v.visitCount = visits.length; }
+      }
       state.results = results;
 
       const salesmen = [...new Set(results.map((r) => r.slsname).filter(Boolean))].sort();
@@ -330,12 +358,14 @@
       .filter((c) => c.checked).map((c) => c.value));
   }
 
-  // Base set for the summary: salesman + search, but NOT category.
+  // Base set for the summary: salesman + search + inkonsisten toggle, but NOT category.
   // (Summary is the category breakdown itself.)
   function getBaseFiltered() {
     const q = $("search").value.trim().toLowerCase();
     const sms = getSelectedSalesmen();
+    const onlyMixed = $("filterInkonsisten") && $("filterInkonsisten").checked;
     return state.results.filter((r) => {
+      if (onlyMixed && r.consistency !== "MIXED") return false;
       if (sms.size > 0 && !sms.has(r.slsname)) return false;
       if (q) {
         const hay = [r.custno, r.namaToko, r.slsname, r.team, r.alamatToko, r.alorReason]
@@ -365,9 +395,12 @@
     const tbody = document.querySelector("#resultTable tbody");
     tbody.innerHTML = slice.map((r) => {
       const info = CATEGORY_INFO[r.category];
+      const cons = CONSISTENCY_INFO[r.consistency] || CONSISTENCY_INFO.SINGLE;
+      const consLabel = r.visitCount > 1 ? `${cons.label} (${r.visitCount}×)` : cons.label;
       const hhtCell = r.hht ? `${escapeHtml(String(r.hht.hht || ""))}${r.hht.tipeScan ? " / " + escapeHtml(String(r.hht.tipeScan)) : ""}` : "—";
       return `<tr>
         <td><span class="tag tag-${r.category}">${escapeHtml(info.label)}</span></td>
+        <td><span class="tag-cons cons-${r.consistency}" title="${escapeHtml(cons.hint)}">${escapeHtml(consLabel)}</span></td>
         <td>${escapeHtml(r.custno)}</td>
         <td>${escapeHtml(r.namaToko || (r.hht && r.hht.namaToko) || "")}</td>
         <td>${escapeHtml(r.slsname || "")}</td>
@@ -397,6 +430,7 @@
   }
 
   $("search").addEventListener("input", debounce(applyFilters, 200));
+  $("filterInkonsisten").addEventListener("change", applyFilters);
 
   // Generic multi-select wiring (used by category + salesman)
   function wireMulti(wrapId, btnId, menuId, allId, itemClass, labelId, noun) {
@@ -483,8 +517,11 @@
     if (!state.filtered.length) return;
     const rows = state.filtered.map((r) => {
       const info = CATEGORY_INFO[r.category];
+      const cons = CONSISTENCY_INFO[r.consistency] || CONSISTENCY_INFO.SINGLE;
       return {
         Kategori: info.label,
+        Konsistensi: cons.label,
+        "Jumlah Kunjungan Outlet": r.visitCount,
         "Kode Outlet": r.custno,
         "Nama Toko": r.namaToko || (r.hht && r.hht.namaToko) || "",
         Salesman: r.slsname || "",

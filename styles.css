@@ -168,6 +168,24 @@ button.ghost:hover:not(:disabled) { background: #f3f4f6; }
 }
 .toolbar > input { flex: 1; min-width: 200px; }
 .multi-opt input[type=checkbox] { flex: 0 0 auto; margin: 0; width: auto; }
+
+.check-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px;
+  background: #fff; font-size: 13px; cursor: pointer; user-select: none;
+}
+.check-toggle:hover { border-color: var(--muted); }
+.check-toggle input { margin: 0; }
+.check-toggle input:checked ~ span { color: var(--primary); font-weight: 500; }
+
+.tag-cons {
+  display: inline-block; padding: 2px 7px; border-radius: 999px;
+  font-size: 10px; font-weight: 600; white-space: nowrap;
+}
+.cons-VALID    { background: #d1fae5; color: #065f46; }
+.cons-PROBLEM  { background: #fee2e2; color: #991b1b; }
+.cons-MIXED    { background: #fed7aa; color: #9a3412; }
+.cons-SINGLE   { background: #f3f4f6; color: #6b7280; font-weight: 500; }
 .count { margin-left: auto; color: var(--muted); font-size: 12px; }
 
 .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
