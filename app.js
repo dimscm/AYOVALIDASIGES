@@ -149,14 +149,12 @@
   }
 
   function parseHht(aoa) {
-    // The HHT file has a merged/sparse header. Find the row that has "No Outlet" & "Nama Outlet" & "HHT" etc.
     let headerAt = -1;
     for (let r = 0; r < Math.min(aoa.length, 30); r++) {
       const norm = (aoa[r] || []).map(normalizeHeader);
-      const hasOutlet = norm.includes("NO OUTLET");
-      const hasName = norm.includes("NAMA OUTLET");
-      const hasHht = norm.includes("HHT");
-      if (hasOutlet && hasName && hasHht) { headerAt = r; break; }
+      if (norm.includes("NO OUTLET") && norm.includes("NAMA OUTLET") && norm.includes("HHT")) {
+        headerAt = r; break;
+      }
     }
     if (headerAt < 0) return { rows: [], warn: "Header HHT tidak dikenali. Kolom HHT diabaikan." };
     const header = aoa[headerAt].map(normalizeHeader);
@@ -168,9 +166,18 @@
     const iAlasan = header.indexOf("ALASAN");
     const iJamIn = header.indexOf("JAM MASUK");
     const iJamOut = header.indexOf("JAM KELUAR");
+    const iSls = header.indexOf("SALESMAN");
+    const iSalesforce = header.indexOf("SALESFORCE");
+    const iTanggal = header.indexOf("TANGGAL");
+    // Forward-fill kolom yang di-merge di Excel (Salesman, Salesforce, Tanggal
+    // hanya muncul di baris pertama per grup).
+    let lastSls = "", lastSalesforce = "", lastTanggal = "";
     const rows = [];
     for (let r = headerAt + 1; r < aoa.length; r++) {
       const row = aoa[r] || [];
+      if (iSls >= 0 && row[iSls]) lastSls = String(row[iSls]).trim();
+      if (iSalesforce >= 0 && row[iSalesforce]) lastSalesforce = String(row[iSalesforce]).trim();
+      if (iTanggal >= 0 && row[iTanggal]) lastTanggal = String(row[iTanggal]).trim();
       const outlet = row[iOutlet];
       if (outlet === undefined || outlet === null || outlet === "") continue;
       rows.push({
@@ -182,6 +189,9 @@
         alasan: row[iAlasan],
         jamin: row[iJamIn],
         jamout: row[iJamOut],
+        salesman: lastSls,
+        salesforce: lastSalesforce,
+        tanggal: lastTanggal,
       });
     }
     return { rows };
@@ -290,7 +300,10 @@
       const results = state.ediRows.map((r) => {
         const hht = state.scanIndex.get(r.custno);
         const cat = categorize(r, hht);
-        return { ...r, hht, category: cat };
+        // Prefer HHT untuk Nama Toko & Salesman. Fallback ke EDI kalau HHT kosong.
+        const namaTokoEff = (hht && hht.namaToko && String(hht.namaToko).trim()) || r.namaToko || "";
+        const salesmanEff = (hht && hht.salesman && String(hht.salesman).trim()) || r.slsname || "";
+        return { ...r, hht, category: cat, namaTokoEff, salesmanEff };
       });
 
       // Consistency per outlet: bandingkan semua kunjungan outlet yang sama.
@@ -314,7 +327,7 @@
       }
       state.results = results;
 
-      const salesmen = [...new Set(results.map((r) => r.slsname).filter(Boolean))].sort();
+      const salesmen = [...new Set(results.map((r) => r.salesmanEff).filter(Boolean))].sort();
       populateSalesmen(salesmen);
       applyFilters();
       $("resultSection").classList.remove("hidden");
@@ -366,9 +379,9 @@
     const onlyMixed = $("filterInkonsisten") && $("filterInkonsisten").checked;
     return state.results.filter((r) => {
       if (onlyMixed && r.consistency !== "MIXED") return false;
-      if (sms.size > 0 && !sms.has(r.slsname)) return false;
+      if (sms.size > 0 && !sms.has(r.salesmanEff)) return false;
       if (q) {
-        const hay = [r.custno, r.namaToko, r.slsname, r.team, r.alamatToko, r.alorReason]
+        const hay = [r.custno, r.namaTokoEff, r.salesmanEff, r.team, r.alamatToko, r.alorReason]
           .map((x) => String(x || "").toLowerCase()).join(" ");
         if (!hay.includes(q)) return false;
       }
@@ -402,8 +415,8 @@
         <td><span class="tag tag-${r.category}">${escapeHtml(info.label)}</span></td>
         <td><span class="tag-cons cons-${r.consistency}" title="${escapeHtml(cons.hint)}">${escapeHtml(consLabel)}</span></td>
         <td>${escapeHtml(r.custno)}</td>
-        <td>${escapeHtml(r.namaToko || (r.hht && r.hht.namaToko) || "")}</td>
-        <td>${escapeHtml(r.slsname || "")}</td>
+        <td>${escapeHtml(r.namaTokoEff)}</td>
+        <td>${escapeHtml(r.salesmanEff)}</td>
         <td>${escapeHtml(r.team || "")}</td>
         <td>${escapeHtml(r.cycle || "")}</td>
         <td>${escapeHtml(r.visitDate || "")}</td>
@@ -523,8 +536,8 @@
         Konsistensi: cons.label,
         "Jumlah Kunjungan Outlet": r.visitCount,
         "Kode Outlet": r.custno,
-        "Nama Toko": r.namaToko || (r.hht && r.hht.namaToko) || "",
-        Salesman: r.slsname || "",
+        "Nama Toko": r.namaTokoEff,
+        Salesman: r.salesmanEff,
         "Rayon (Team)": r.team || "",
         Cycle: r.cycle || "",
         "Visit Date": r.visitDate || "",
