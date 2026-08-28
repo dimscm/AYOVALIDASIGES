@@ -118,7 +118,18 @@
             <label class="multi-opt"><input type="checkbox" value="BLANK-NOSCAN" class="filterCategoryItem" /> FLAG BLANK, TDK SCAN</label>
           </div>
         </div>
-        <select id="filterSalesman"><option value="">Semua salesman</option></select>
+        <div class="multi" id="filterSalesman">
+          <button type="button" class="multi-btn" id="filterSalesmanBtn">
+            <span id="filterSalesmanLabel">Semua salesman</span>
+            <span class="chev">▾</span>
+          </button>
+          <div class="multi-menu wide" id="filterSalesmanMenu" hidden>
+            <input type="search" id="filterSalesmanSearch" class="multi-search" placeholder="Cari salesman..." />
+            <label class="multi-opt all"><input type="checkbox" id="filterSalesmanAll" checked /> Semua salesman</label>
+            <div class="multi-sep"></div>
+            <div id="filterSalesmanList"></div>
+          </div>
+        </div>
         <button id="exportBtn" class="ghost">Export Excel</button>
         <span id="countInfo" class="count"></span>
       </div>

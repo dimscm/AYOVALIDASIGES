@@ -244,8 +244,13 @@
     $("ediName").textContent = "Belum ada file"; $("hhtName").textContent = "Belum ada file";
     $("resultSection").classList.add("hidden");
     document.querySelectorAll(".filterCategoryItem").forEach((c) => (c.checked = false));
+    document.querySelectorAll(".filterSalesmanItem").forEach((c) => (c.checked = false));
     const catAll = $("filterCategoryAll"); if (catAll) catAll.checked = true;
     const catLabel = $("filterCategoryLabel"); if (catLabel) catLabel.textContent = "Semua kategori";
+    const smAll = $("filterSalesmanAll"); if (smAll) smAll.checked = true;
+    const smLabel = $("filterSalesmanLabel"); if (smLabel) smLabel.textContent = "Semua salesman";
+    const sSearch = $("filterSalesmanSearch"); if (sSearch) sSearch.value = "";
+    $("search").value = "";
     setStatus("");
     toggleProcess();
   });
@@ -281,13 +286,8 @@
       });
       state.results = results;
 
-      // populate salesman filter
       const salesmen = [...new Set(results.map((r) => r.slsname).filter(Boolean))].sort();
-      const sel = $("filterSalesman");
-      sel.innerHTML = '<option value="">Semua salesman</option>' +
-        salesmen.map((s) => `<option>${escapeHtml(s)}</option>`).join("");
-
-      renderSummary();
+      populateSalesmen(salesmen);
       applyFilters();
       $("resultSection").classList.remove("hidden");
       setStatus(`Selesai: ${results.length} baris diproses${hhtWarn ? " — " + hhtWarn : ""}.`, "ok");
@@ -299,11 +299,12 @@
     }
   });
 
-  function renderSummary() {
+  function renderSummary(rows) {
+    rows = rows || state.results;
     const counts = {};
     for (const k of Object.keys(CATEGORY_INFO)) counts[k] = 0;
-    for (const r of state.results) counts[r.category]++;
-    const total = state.results.length;
+    for (const r of rows) counts[r.category]++;
+    const total = rows.length;
 
     const html = [
       statCard("Total baris", total, "info"),
@@ -321,26 +322,35 @@
   }
 
   function getSelectedCategories() {
-    const items = document.querySelectorAll(".filterCategoryItem");
-    const on = [...items].filter((c) => c.checked).map((c) => c.value);
-    return new Set(on);
+    return new Set([...document.querySelectorAll(".filterCategoryItem")]
+      .filter((c) => c.checked).map((c) => c.value));
+  }
+  function getSelectedSalesmen() {
+    return new Set([...document.querySelectorAll(".filterSalesmanItem")]
+      .filter((c) => c.checked).map((c) => c.value));
   }
 
-  function applyFilters() {
+  // Base set for the summary: salesman + search, but NOT category.
+  // (Summary is the category breakdown itself.)
+  function getBaseFiltered() {
     const q = $("search").value.trim().toLowerCase();
-    const cats = getSelectedCategories();
-    const sm = $("filterSalesman").value;
-    state.filtered = state.results.filter((r) => {
-      if (cats.size > 0 && !cats.has(r.category)) return false;
-      if (sm && r.slsname !== sm) return false;
+    const sms = getSelectedSalesmen();
+    return state.results.filter((r) => {
+      if (sms.size > 0 && !sms.has(r.slsname)) return false;
       if (q) {
-        const hay = [
-          r.custno, r.namaToko, r.slsname, r.team, r.alamatToko, r.alorReason
-        ].map((x) => String(x || "").toLowerCase()).join(" ");
+        const hay = [r.custno, r.namaToko, r.slsname, r.team, r.alamatToko, r.alorReason]
+          .map((x) => String(x || "").toLowerCase()).join(" ");
         if (!hay.includes(q)) return false;
       }
       return true;
     });
+  }
+
+  function applyFilters() {
+    const base = getBaseFiltered();
+    renderSummary(base);
+    const cats = getSelectedCategories();
+    state.filtered = cats.size === 0 ? base : base.filter((r) => cats.has(r.category));
     state.page = 1;
     renderTable();
   }
@@ -387,59 +397,74 @@
   }
 
   $("search").addEventListener("input", debounce(applyFilters, 200));
-  $("filterSalesman").addEventListener("change", applyFilters);
 
-  // Multi-select category filter
-  const catWrap = $("filterCategory");
-  const catBtn = $("filterCategoryBtn");
-  const catMenu = $("filterCategoryMenu");
-  const catAll = $("filterCategoryAll");
-  const catItems = () => document.querySelectorAll(".filterCategoryItem");
-
-  function updateCategoryLabel() {
-    const items = [...catItems()];
-    const on = items.filter((c) => c.checked);
-    const label = $("filterCategoryLabel");
-    if (on.length === 0 || on.length === items.length) {
-      label.textContent = "Semua kategori";
-      catAll.checked = true;
-    } else if (on.length === 1) {
-      label.textContent = on[0].parentElement.textContent.trim();
-      catAll.checked = false;
-    } else {
-      label.textContent = `${on.length} kategori dipilih`;
-      catAll.checked = false;
+  // Generic multi-select wiring (used by category + salesman)
+  function wireMulti(wrapId, btnId, menuId, allId, itemClass, labelId, noun) {
+    const wrap = $(wrapId), btn = $(btnId), menu = $(menuId), all = $(allId), label = $(labelId);
+    const items = () => document.querySelectorAll("." + itemClass);
+    function updateLabel() {
+      const list = [...items()];
+      const on = list.filter((c) => c.checked);
+      if (on.length === 0 || on.length === list.length) {
+        label.textContent = "Semua " + noun;
+        all.checked = true;
+      } else if (on.length === 1) {
+        label.textContent = on[0].parentElement.textContent.trim();
+        all.checked = false;
+      } else {
+        label.textContent = `${on.length} ${noun} dipilih`;
+        all.checked = false;
+      }
     }
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const open = !menu.hidden;
+      menu.hidden = open;
+      wrap.classList.toggle("open", !open);
+    });
+    document.addEventListener("click", (e) => {
+      if (!wrap.contains(e.target)) { menu.hidden = true; wrap.classList.remove("open"); }
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") { menu.hidden = true; wrap.classList.remove("open"); }
+    });
+    all.addEventListener("change", () => {
+      items().forEach((c) => (c.checked = false));
+      all.checked = true;
+      updateLabel();
+      applyFilters();
+    });
+    return { updateLabel, items };
   }
 
-  catBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    const open = !catMenu.hidden;
-    catMenu.hidden = open;
-    catWrap.classList.toggle("open", !open);
-  });
-  document.addEventListener("click", (e) => {
-    if (!catWrap.contains(e.target)) {
-      catMenu.hidden = true;
-      catWrap.classList.remove("open");
-    }
-  });
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") {
-      catMenu.hidden = true;
-      catWrap.classList.remove("open");
-    }
-  });
-  catAll.addEventListener("change", () => {
-    catItems().forEach((c) => (c.checked = false));
-    catAll.checked = true;
-    updateCategoryLabel();
-    applyFilters();
-  });
-  catItems().forEach((c) => c.addEventListener("change", () => {
-    updateCategoryLabel();
-    applyFilters();
+  const catCtrl = wireMulti("filterCategory", "filterCategoryBtn", "filterCategoryMenu",
+    "filterCategoryAll", "filterCategoryItem", "filterCategoryLabel", "kategori");
+  catCtrl.items().forEach((c) => c.addEventListener("change", () => {
+    catCtrl.updateLabel(); applyFilters();
   }));
+
+  const smCtrl = wireMulti("filterSalesman", "filterSalesmanBtn", "filterSalesmanMenu",
+    "filterSalesmanAll", "filterSalesmanItem", "filterSalesmanLabel", "salesman");
+
+  function populateSalesmen(names) {
+    const list = $("filterSalesmanList");
+    list.innerHTML = names.map((n) => {
+      const safe = escapeHtml(n);
+      return `<label class="multi-opt" data-name="${safe.toLowerCase()}"><input type="checkbox" value="${safe}" class="filterSalesmanItem" /> ${safe}</label>`;
+    }).join("");
+    list.querySelectorAll(".filterSalesmanItem").forEach((c) => {
+      c.addEventListener("change", () => { smCtrl.updateLabel(); applyFilters(); });
+    });
+    smCtrl.updateLabel();
+  }
+
+  // in-menu search for salesman
+  $("filterSalesmanSearch").addEventListener("input", (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    $("filterSalesmanList").querySelectorAll(".multi-opt").forEach((el) => {
+      el.style.display = !q || el.getAttribute("data-name").includes(q) ? "" : "none";
+    });
+  });
   $("prevPage").addEventListener("click", () => { if (state.page > 1) { state.page--; renderTable(); } });
   $("nextPage").addEventListener("click", () => { state.page++; renderTable(); });
 

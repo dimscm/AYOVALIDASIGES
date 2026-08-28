@@ -142,7 +142,13 @@ button.ghost:hover:not(:disabled) { background: #f3f4f6; }
   position: absolute; top: calc(100% + 4px); left: 0; z-index: 20;
   background: #fff; border: 1px solid var(--line); border-radius: 6px;
   box-shadow: 0 6px 20px rgba(0,0,0,0.10);
-  min-width: 260px; padding: 4px; max-height: 320px; overflow-y: auto;
+  min-width: 260px; padding: 4px; max-height: 360px; overflow-y: auto;
+}
+.multi-menu.wide { min-width: 320px; }
+.multi-search {
+  width: 100%; padding: 6px 8px; margin-bottom: 4px;
+  border: 1px solid var(--line); border-radius: 4px; font-size: 13px;
+  color: var(--ink); background: #fff;
 }
 .multi-opt {
   display: flex; align-items: center; gap: 8px;
