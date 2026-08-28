@@ -435,9 +435,13 @@
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") { menu.hidden = true; wrap.classList.remove("open"); }
     });
-    all.addEventListener("change", () => {
+    all.addEventListener("click", (e) => {
+      // "Semua" bertindak sebagai tombol reset — selalu berakhir tercentang.
+      // Klik selalu: kosongkan pilihan individual, biarkan Semua checked.
+      // Setelah toggle default: all.checked == true berarti tadinya unchecked,
+      // biarkan; all.checked == false berarti tadinya checked, cegah unchecking.
+      if (!all.checked) e.preventDefault();
       items().forEach((c) => (c.checked = false));
-      all.checked = true;
       updateLabel();
       applyFilters();
     });
