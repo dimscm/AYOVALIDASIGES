@@ -222,119 +222,34 @@
     return key;
   }
 
-  async function readDmpText(file) {
-    // Auto-detect: .7z (7z-wasm), .zip (JSZip), .gz (DecompressionStream), else plain text.
-    const name = (file.name || "").toLowerCase();
-    if (name.endsWith(".7z")) {
-      if (typeof SevenZip === "undefined") throw new Error("7z-wasm belum termuat.");
-      setStatus("Extract 7z... (mungkin agak lama)");
-      const sz = await SevenZip({
-        locateFile: (p) => p.endsWith(".wasm") ? "vendor/7zz.wasm" : p,
-        print: () => {},
-        printErr: () => {},
-      });
-      const workDir = "/work";
-      try { sz.FS.mkdir(workDir); } catch {}
-      sz.FS.chdir(workDir);
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      sz.FS.writeFile("archive.7z", bytes);
-      // Extract semua ke workDir (e = extract flat).
-      const rc = sz.callMain(["e", "-y", "archive.7z"]);
-      if (rc !== 0) throw new Error("Gagal extract .7z (kode " + rc + ").");
-      const entries = sz.FS.readdir(workDir).filter((f) => f !== "." && f !== ".." && f !== "archive.7z");
-      // Pilih .txt/.csv/.tsv terbesar.
-      let best = null, bestSize = -1;
-      for (const f of entries) {
-        const lf = f.toLowerCase();
-        if (!lf.endsWith(".txt") && !lf.endsWith(".csv") && !lf.endsWith(".tsv")) continue;
-        const stat = sz.FS.stat(workDir + "/" + f);
-        if (stat.size > bestSize) { best = f; bestSize = stat.size; }
-      }
-      if (!best) throw new Error(".7z tidak berisi file .txt/.csv/.tsv.");
-      const data = sz.FS.readFile(workDir + "/" + best);
-      return new TextDecoder("utf-8").decode(data);
-    }
-    if (name.endsWith(".zip")) {
-      if (typeof JSZip === "undefined") throw new Error("JSZip belum termuat.");
-      const zip = await JSZip.loadAsync(await file.arrayBuffer());
-      const candidates = [];
-      zip.forEach((path, entry) => {
-        if (entry.dir) return;
-        const p = path.toLowerCase();
-        if (p.endsWith(".txt") || p.endsWith(".csv") || p.endsWith(".tsv")) {
-          candidates.push({ path, entry, size: entry._data ? entry._data.uncompressedSize : 0 });
-        }
-      });
-      if (!candidates.length) throw new Error("ZIP tidak berisi file .txt/.csv/.tsv.");
-      candidates.sort((a, b) => b.size - a.size);
-      return await candidates[0].entry.async("string");
-    }
-    if (name.endsWith(".gz")) {
-      if (typeof DecompressionStream === "undefined") throw new Error("Browser tidak mendukung DecompressionStream (butuh Chrome/Edge/Firefox modern).");
-      const ds = new DecompressionStream("gzip");
-      const stream = file.stream().pipeThrough(ds);
-      return await new Response(stream).text();
-    }
-    return await file.text();
-  }
-
-  async function parseDmp(file) {
-    // Pipe-delimited text: KODESUBDIST|NAMASUBDIST|KODEBRANCH|KODEOUTLET|NAMAOUTLET|...
-    // Kolom yang kita butuh: KODEOUTLET, NAMAOUTLET, ALAMAT, SLSNO, RAYON, SALESMAN,
-    // KODESALESFORCE, NAMASALESFORCE, CYCLE.
-    const text = await readDmpText(file);
-    const nl = text.indexOf("\n");
-    if (nl < 0) throw new Error("DMP kosong.");
-    const headerLine = text.slice(0, nl).replace(/\r$/, "");
-    const cols = headerLine.split("|").map((s) => s.trim().toUpperCase());
-    const iKO = cols.indexOf("KODEOUTLET");
-    const iNO = cols.indexOf("NAMAOUTLET");
-    if (iKO < 0 || iNO < 0) throw new Error("Header DMP tidak dikenali (butuh KODEOUTLET, NAMAOUTLET).");
-    const iAlamat = cols.indexOf("ALAMAT");
-    const iSlsno = cols.indexOf("SLSNO");
-    const iSls = cols.indexOf("SALESMAN");
-    const iRayon = cols.indexOf("RAYON");
-    const iSf = cols.indexOf("KODESALESFORCE");
-    const iSfName = cols.indexOf("NAMASALESFORCE");
-    const iCycle = cols.indexOf("CYCLE");
-    const iBranch = cols.indexOf("KODEBRANCH");
-    const idx = new Map();
-    let bodyAt = nl + 1;
-    let count = 0;
-    while (bodyAt < text.length) {
-      let end = text.indexOf("\n", bodyAt);
+  // Split text as delimited (auto-detect: pipe > tab > semicolon > comma) into AoA.
+  function parseDelimitedText(text) {
+    if (!text) return [];
+    const firstNl = text.indexOf("\n");
+    const firstLine = (firstNl < 0 ? text : text.slice(0, firstNl)).replace(/\r$/, "");
+    let delim = "|";
+    if (firstLine.includes("|")) delim = "|";
+    else if (firstLine.includes("\t")) delim = "\t";
+    else if (firstLine.includes(";")) delim = ";";
+    else if (firstLine.includes(",")) delim = ",";
+    const rows = [];
+    let at = 0;
+    while (at < text.length) {
+      let end = text.indexOf("\n", at);
       if (end < 0) end = text.length;
-      const line = text.slice(bodyAt, end).replace(/\r$/, "");
-      bodyAt = end + 1;
+      const line = text.slice(at, end).replace(/\r$/, "");
+      at = end + 1;
       if (!line) continue;
-      const parts = line.split("|");
-      const ko = (parts[iKO] || "").trim();
-      if (!ko) continue;
-      // Preserve first record per outlet (DMP bisa punya baris duplikat per salesman).
-      if (idx.has(ko)) continue;
-      idx.set(ko, {
-        namaOutlet: (parts[iNO] || "").trim(),
-        alamat: iAlamat >= 0 ? (parts[iAlamat] || "").trim() : "",
-        slsno: iSlsno >= 0 ? (parts[iSlsno] || "").trim() : "",
-        salesman: iSls >= 0 ? (parts[iSls] || "").trim() : "",
-        rayon: iRayon >= 0 ? (parts[iRayon] || "").trim() : "",
-        salesforce: iSf >= 0 ? (parts[iSf] || "").trim() : "",
-        salesforceName: iSfName >= 0 ? (parts[iSfName] || "").trim() : "",
-        cycle: iCycle >= 0 ? (parts[iCycle] || "").trim() : "",
-        branch: iBranch >= 0 ? (parts[iBranch] || "").trim() : "",
-      });
-      count++;
+      rows.push(line.split(delim));
     }
-    return { index: idx, count };
+    return rows;
   }
 
-  async function extractExcelBytes(file) {
-    // Untuk file .7z/.zip/.gz berisi Excel: extract lalu return Uint8Array-nya.
-    const name = (file.name || "").toLowerCase();
-    if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
-      return new Uint8Array(await file.arrayBuffer());
-    }
-    if (name.endsWith(".7z")) {
+  // Extract compressed archive → { bytes, name } of a data file inside.
+  // Handles .7z (7z-wasm), .zip (JSZip), .gz (native).
+  async function extractCompressed(file) {
+    const nm = (file.name || "").toLowerCase();
+    if (nm.endsWith(".7z")) {
       if (typeof SevenZip === "undefined") throw new Error("7z-wasm belum termuat.");
       setStatus("Extract 7z...");
       const sz = await SevenZip({
@@ -348,52 +263,107 @@
       const rc = sz.callMain(["e", "-y", "archive.7z"]);
       if (rc !== 0) throw new Error("Gagal extract .7z");
       const entries = sz.FS.readdir(workDir).filter((f) => f !== "." && f !== ".." && f !== "archive.7z");
+      // Pilih file data terbesar (xlsx/xls/txt/csv/tsv).
       let best = null, bestSize = -1;
       for (const f of entries) {
         const lf = f.toLowerCase();
-        if (!lf.endsWith(".xlsx") && !lf.endsWith(".xls")) continue;
+        if (!/\.(xlsx|xls|txt|csv|tsv)$/i.test(lf)) continue;
         const stat = sz.FS.stat(workDir + "/" + f);
         if (stat.size > bestSize) { best = f; bestSize = stat.size; }
       }
-      if (!best) throw new Error(".7z tidak berisi file .xlsx/.xls.");
-      return sz.FS.readFile(workDir + "/" + best);
+      if (!best) throw new Error(".7z tidak berisi file data (.xlsx/.xls/.txt/.csv/.tsv).");
+      return { bytes: sz.FS.readFile(workDir + "/" + best), name: best };
     }
-    if (name.endsWith(".zip")) {
+    if (nm.endsWith(".zip")) {
       if (typeof JSZip === "undefined") throw new Error("JSZip belum termuat.");
       const zip = await JSZip.loadAsync(await file.arrayBuffer());
       const candidates = [];
       zip.forEach((path, entry) => {
         if (entry.dir) return;
-        const p = path.toLowerCase();
-        if (p.endsWith(".xlsx") || p.endsWith(".xls")) {
-          candidates.push({ entry, size: entry._data ? entry._data.uncompressedSize : 0 });
+        if (/\.(xlsx|xls|txt|csv|tsv)$/i.test(path)) {
+          candidates.push({ path, entry, size: entry._data ? entry._data.uncompressedSize : 0 });
         }
       });
-      if (!candidates.length) throw new Error("ZIP tidak berisi file .xlsx/.xls.");
+      if (!candidates.length) throw new Error("ZIP tidak berisi file data (.xlsx/.xls/.txt/.csv/.tsv).");
       candidates.sort((a, b) => b.size - a.size);
-      const u8 = await candidates[0].entry.async("uint8array");
-      return u8;
+      return { bytes: await candidates[0].entry.async("uint8array"), name: candidates[0].path };
     }
-    if (name.endsWith(".gz")) {
+    if (nm.endsWith(".gz")) {
       if (typeof DecompressionStream === "undefined") throw new Error("Browser tidak mendukung DecompressionStream.");
       const ds = new DecompressionStream("gzip");
       const stream = file.stream().pipeThrough(ds);
-      return new Uint8Array(await new Response(stream).arrayBuffer());
+      const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+      return { bytes, name: file.name.replace(/\.gz$/i, "") };
     }
-    // Fallback: coba baca langsung sebagai Excel.
-    return new Uint8Array(await file.arrayBuffer());
+    throw new Error("Format archive tidak dikenali: " + file.name);
   }
 
-  async function readWorkbook(file) {
-    const buf = await extractExcelBytes(file);
+  // Universal reader: return array-of-arrays (AoA) dari sumber apa pun.
+  // Excel, teks pipe/tab/csv, atau salah satunya di dalam archive.
+  async function readAsAoA(file) {
+    const nm = (file.name || "").toLowerCase();
+    if (nm.endsWith(".7z") || nm.endsWith(".zip") || nm.endsWith(".gz")) {
+      const { bytes, name } = await extractCompressed(file);
+      const inner = new File([bytes], name);
+      return await readAsAoA(inner);
+    }
+    if (nm.endsWith(".txt") || nm.endsWith(".csv") || nm.endsWith(".tsv")) {
+      return parseDelimitedText(await file.text());
+    }
+    // Default: Excel.
+    const buf = new Uint8Array(await file.arrayBuffer());
     const wb = XLSX.read(buf, { type: "array", cellDates: true });
-    for (const name of wb.SheetNames) {
-      const ws = wb.Sheets[name];
+    for (const n of wb.SheetNames) {
+      const ws = wb.Sheets[n];
       const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
       if (aoa.length > 1) return aoa;
     }
     throw new Error("Sheet kosong.");
   }
+
+  async function parseDmp(file) {
+    // Universal: menerima .txt/.csv/.xlsx/.xls (dan compressed-nya).
+    // Kolom yang kita butuh: KODEOUTLET, NAMAOUTLET, ALAMAT, SLSNO, RAYON,
+    // SALESMAN, KODESALESFORCE, NAMASALESFORCE, CYCLE.
+    const rows = await readAsAoA(file);
+    if (!rows.length) throw new Error("DMP kosong.");
+    const cols = rows[0].map((s) => String(s == null ? "" : s).trim().toUpperCase());
+    const iKO = cols.indexOf("KODEOUTLET");
+    const iNO = cols.indexOf("NAMAOUTLET");
+    if (iKO < 0 || iNO < 0) throw new Error("Header DMP tidak dikenali (butuh KODEOUTLET, NAMAOUTLET).");
+    const iAlamat = cols.indexOf("ALAMAT");
+    const iSlsno = cols.indexOf("SLSNO");
+    const iSls = cols.indexOf("SALESMAN");
+    const iRayon = cols.indexOf("RAYON");
+    const iSf = cols.indexOf("KODESALESFORCE");
+    const iSfName = cols.indexOf("NAMASALESFORCE");
+    const iCycle = cols.indexOf("CYCLE");
+    const iBranch = cols.indexOf("KODEBRANCH");
+    const cell = (row, i) => i >= 0 && row[i] != null ? String(row[i]).trim() : "";
+    const idx = new Map();
+    let count = 0;
+    for (let r = 1; r < rows.length; r++) {
+      const row = rows[r] || [];
+      const ko = cell(row, iKO);
+      if (!ko || idx.has(ko)) continue;
+      idx.set(ko, {
+        namaOutlet: cell(row, iNO),
+        alamat: cell(row, iAlamat),
+        slsno: cell(row, iSlsno),
+        salesman: cell(row, iSls),
+        rayon: cell(row, iRayon),
+        salesforce: cell(row, iSf),
+        salesforceName: cell(row, iSfName),
+        cycle: cell(row, iCycle),
+        branch: cell(row, iBranch),
+      });
+      count++;
+    }
+    return { index: idx, count };
+  }
+
+  // Legacy alias, sekarang unified ke readAsAoA.
+  const readWorkbook = readAsAoA;
 
   function setStatus(msg, cls = "") {
     const el = $("status");
