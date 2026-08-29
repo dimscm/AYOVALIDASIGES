@@ -328,10 +328,65 @@
     return { index: idx, count };
   }
 
+  async function extractExcelBytes(file) {
+    // Untuk file .7z/.zip/.gz berisi Excel: extract lalu return Uint8Array-nya.
+    const name = (file.name || "").toLowerCase();
+    if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
+      return new Uint8Array(await file.arrayBuffer());
+    }
+    if (name.endsWith(".7z")) {
+      if (typeof SevenZip === "undefined") throw new Error("7z-wasm belum termuat.");
+      setStatus("Extract 7z...");
+      const sz = await SevenZip({
+        locateFile: (p) => p.endsWith(".wasm") ? "vendor/7zz.wasm" : p,
+        print: () => {}, printErr: () => {},
+      });
+      const workDir = "/work";
+      try { sz.FS.mkdir(workDir); } catch {}
+      sz.FS.chdir(workDir);
+      sz.FS.writeFile("archive.7z", new Uint8Array(await file.arrayBuffer()));
+      const rc = sz.callMain(["e", "-y", "archive.7z"]);
+      if (rc !== 0) throw new Error("Gagal extract .7z");
+      const entries = sz.FS.readdir(workDir).filter((f) => f !== "." && f !== ".." && f !== "archive.7z");
+      let best = null, bestSize = -1;
+      for (const f of entries) {
+        const lf = f.toLowerCase();
+        if (!lf.endsWith(".xlsx") && !lf.endsWith(".xls")) continue;
+        const stat = sz.FS.stat(workDir + "/" + f);
+        if (stat.size > bestSize) { best = f; bestSize = stat.size; }
+      }
+      if (!best) throw new Error(".7z tidak berisi file .xlsx/.xls.");
+      return sz.FS.readFile(workDir + "/" + best);
+    }
+    if (name.endsWith(".zip")) {
+      if (typeof JSZip === "undefined") throw new Error("JSZip belum termuat.");
+      const zip = await JSZip.loadAsync(await file.arrayBuffer());
+      const candidates = [];
+      zip.forEach((path, entry) => {
+        if (entry.dir) return;
+        const p = path.toLowerCase();
+        if (p.endsWith(".xlsx") || p.endsWith(".xls")) {
+          candidates.push({ entry, size: entry._data ? entry._data.uncompressedSize : 0 });
+        }
+      });
+      if (!candidates.length) throw new Error("ZIP tidak berisi file .xlsx/.xls.");
+      candidates.sort((a, b) => b.size - a.size);
+      const u8 = await candidates[0].entry.async("uint8array");
+      return u8;
+    }
+    if (name.endsWith(".gz")) {
+      if (typeof DecompressionStream === "undefined") throw new Error("Browser tidak mendukung DecompressionStream.");
+      const ds = new DecompressionStream("gzip");
+      const stream = file.stream().pipeThrough(ds);
+      return new Uint8Array(await new Response(stream).arrayBuffer());
+    }
+    // Fallback: coba baca langsung sebagai Excel.
+    return new Uint8Array(await file.arrayBuffer());
+  }
+
   async function readWorkbook(file) {
-    const buf = await file.arrayBuffer();
+    const buf = await extractExcelBytes(file);
     const wb = XLSX.read(buf, { type: "array", cellDates: true });
-    // Use first non-empty sheet
     for (const name of wb.SheetNames) {
       const ws = wb.Sheets[name];
       const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
@@ -458,7 +513,13 @@
       $("resultSection").classList.remove("hidden");
       const msg = [`Selesai · ${results.length.toLocaleString("id-ID")} baris`];
       if (dmpCount) msg.push(`DMP: ${dmpCount.toLocaleString("id-ID")} outlet`);
-      if (!state.hhtFile) msg.push("HHT tidak diupload, kolom scan dianggap TDK");
+      if (state.hhtFile) {
+        const matched = results.filter((r) => r.hht).length;
+        const scanned = results.filter((r) => isScanned(r.hht)).length;
+        msg.push(`HHT match: ${matched.toLocaleString("id-ID")} · TP SCAN: ${scanned.toLocaleString("id-ID")}`);
+      } else {
+        msg.push("HHT tidak diupload, kolom scan dianggap TDK");
+      }
       if (hhtWarn) msg.push(hhtWarn);
       setStatus(msg.join(" · "), "ok");
     } catch (err) {
@@ -523,6 +584,12 @@
     renderSummary(base);
     const cats = getSelectedCategories();
     state.filtered = cats.size === 0 ? base : base.filter((r) => cats.has(r.category));
+    // Urutkan supaya baris outlet yang sama berkumpul (visual "merged cell").
+    state.filtered.sort((a, b) => {
+      const c = String(a.custno).localeCompare(String(b.custno));
+      if (c) return c;
+      return String(a.visitDate || "").localeCompare(String(b.visitDate || ""));
+    });
     state.page = 1;
     renderTable();
   }
@@ -535,19 +602,30 @@
     const slice = state.filtered.slice(start, start + state.pageSize);
 
     const tbody = document.querySelector("#resultTable tbody");
+    let prevCust = null;
     tbody.innerHTML = slice.map((r) => {
       const info = CATEGORY_INFO[r.category];
       const cons = CONSISTENCY_INFO[r.consistency] || CONSISTENCY_INFO.SINGLE;
       const consLabel = r.visitCount > 1 ? `${cons.label} (${r.visitCount}×)` : cons.label;
       const hhtCell = r.hht ? `${escapeHtml(String(r.hht.hht || ""))}${r.hht.tipeScan ? " / " + escapeHtml(String(r.hht.tipeScan)) : ""}` : "—";
-      return `<tr>
+      // Kalau baris ini outlet yang sama dengan baris sebelumnya (di halaman ini),
+      // kosongkan kolom identitas outlet supaya visual seperti merged cell.
+      const dup = r.custno === prevCust;
+      prevCust = r.custno;
+      const nomor = dup ? "" : escapeHtml(r.custno);
+      const nama = dup ? "" : escapeHtml(r.namaTokoEff);
+      const sls = dup ? "" : escapeHtml(r.salesmanEff);
+      const rayon = dup ? "" : escapeHtml(r.rayonEff);
+      const cycle = dup ? "" : escapeHtml(r.cycleEff);
+      const consTag = dup ? "" : `<span class="tag-cons cons-${r.consistency}" title="${escapeHtml(cons.hint)}">${escapeHtml(consLabel)}</span>`;
+      return `<tr class="${dup ? "row-dup" : ""}">
         <td><span class="tag tag-${r.category}">${escapeHtml(info.label)}</span></td>
-        <td><span class="tag-cons cons-${r.consistency}" title="${escapeHtml(cons.hint)}">${escapeHtml(consLabel)}</span></td>
-        <td>${escapeHtml(r.custno)}</td>
-        <td>${escapeHtml(r.namaTokoEff)}</td>
-        <td>${escapeHtml(r.salesmanEff)}</td>
-        <td>${escapeHtml(r.rayonEff)}</td>
-        <td>${escapeHtml(r.cycleEff)}</td>
+        <td>${consTag}</td>
+        <td>${nomor}</td>
+        <td>${nama}</td>
+        <td>${sls}</td>
+        <td>${rayon}</td>
+        <td>${cycle}</td>
         <td>${escapeHtml(r.visitDate || "")}</td>
         <td>${escapeHtml(r.jamin || "")}</td>
         <td>${escapeHtml(r.jamout || "")}</td>

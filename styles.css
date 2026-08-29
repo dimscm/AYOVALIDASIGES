@@ -210,6 +210,8 @@ table { width: 100%; border-collapse: collapse; font-size: 12px; }
 th, td { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
 th { background: #f9fafb; font-weight: 600; position: sticky; top: 0; white-space: nowrap; }
 tr:hover td { background: #fafbfc; }
+tr.row-dup td { border-top: 1px dashed #f0f0f0; }
+tr.row-dup td:first-child { border-top-color: var(--line); }
 
 .tag {
   display: inline-block; padding: 2px 7px; border-radius: 999px; font-size: 10px; font-weight: 600;

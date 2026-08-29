@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Ayo Validasi GES - Cek Kriteria Flag Radius</title>
-  <link rel="stylesheet" href="styles.css?v=9" />
+  <link rel="stylesheet" href="styles.css?v=10" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23c8102e'/%3E%3Ctext x='50' y='62' font-size='34' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EM3%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -90,10 +90,10 @@
       <h2>Upload File</h2>
       <div class="uploads">
         <label class="drop">
-          <input type="file" id="ediFile" accept=".xlsx,.xls" />
+          <input type="file" id="ediFile" accept=".xlsx,.xls,.7z,.zip,.gz" />
           <div>
             <b>EDI Flag Radius</b>
-            <p>File Excel dari Matriks (kolom: FLAG RADIUS, CUSTNO, dst.)</p>
+            <p>Excel dari Matriks (<code>.xlsx</code>/<code>.xls</code>) atau langsung <code>.7z</code>/<code>.zip</code>/<code>.gz</code>-nya. Kolom: FLAG RADIUS, CUSTNO, dst.</p>
             <p class="filename" id="ediName">Belum ada file</p>
           </div>
         </label>
@@ -199,12 +199,12 @@
       </div>
     </section>
 
-    <p class="foot">Dibuat untuk tim validasi. Semua pemrosesan berjalan lokal di browser Anda — file tidak diunggah ke server. <span class="ver">v9</span></p>
+    <p class="foot">Dibuat untuk tim validasi. Semua pemrosesan berjalan lokal di browser Anda — file tidak diunggah ke server. <span class="ver">v10</span></p>
   </main>
 
   <script src="vendor/xlsx.full.min.js"></script>
   <script src="vendor/jszip.min.js"></script>
   <script src="vendor/7zz.umd.js"></script>
-  <script src="app.js?v=9"></script>
+  <script src="app.js?v=10"></script>
 </body>
 </html>
