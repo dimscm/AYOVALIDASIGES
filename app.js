@@ -407,23 +407,56 @@
     const iSls = cols.indexOf("SALESMAN");
     const iRayon = cols.indexOf("RAYON");
     const iCycle = cols.indexOf("CYCLE");
+    const iStatus = cols.indexOf("STATUS");
+    const iStatusReg = cols.indexOf("STATUSREGISTER");
     const cell = (row, i) => i >= 0 && row[i] != null ? String(row[i]).trim() : "";
     const idx = new Map();
     const bySalesman = new Map();   // salesman -> [kode outlet] (DMP itu master outlet)
-    let count = 0;
+    let count = 0, aktif = 0, ganda = 0;
     for (let r = 1; r < rows.length; r++) {
       const row = rows[r] || [];
       const ko = cell(row, iKO);
-      if (!ko || idx.has(ko)) continue;
+      if (!ko) continue;
+
+      // Satu outlet bisa muncul di beberapa baris DMP dengan salesman & rayon
+      // BERBEDA (di file contoh ada 864 outlet seperti ini, 806 di antaranya
+      // rayonnya juga beda). Dulu baris ke-2 dst langsung dibuang, akibatnya
+      // outlet itu cuma diakui milik salesman yang kebetulan barisnya duluan —
+      // salesman lain kehilangan outletnya dan jumlahnya jadi kurang dari DMP.
+      // Sekarang tiap penugasan direkam.
+      const slsRow = cell(row, iSls);
+      const ryRow = cell(row, iRayon);
+      const prev = idx.get(ko);
+      if (prev) {
+        if (slsRow && !(prev.salesman === slsRow && prev.rayon === ryRow)
+            && !(prev.alt || []).some((a) => a.s === slsRow && a.r === ryRow)) {
+          (prev.alt || (prev.alt = [])).push({ s: slsRow, r: ryRow });
+          let lst2 = bySalesman.get(slsRow);
+          if (!lst2) { lst2 = []; bySalesman.set(slsRow, lst2); }
+          lst2.push(ko);
+          ganda++;
+        }
+        continue;
+      }
       // Hanya simpan kolom yang benar-benar dipakai — DMP bisa 150rb baris,
       // menyimpan kolom yang tidak terpakai memboroskan memori (berat di HP).
-      const sls = cell(row, iSls);
+      const sls = slsRow;
+      // STATUS N / STATUSREGISTER "Non Active" = outlet mati. Di file contoh ada
+      // 102.574 outlet seperti ini: tanpa salesman, tanpa rayon. Outlet mati tidak
+      // pantas jadi penyebut coverage, tapi tetap disimpan supaya kalau ternyata
+      // ada transaksinya bisa ketahuan.
+      const stat = cell(row, iStatus).toUpperCase();
+      const statReg = cell(row, iStatusReg).toUpperCase();
+      const isAktif = iStatus < 0 && iStatusReg < 0
+        ? true
+        : stat !== "N" && !statReg.startsWith("NON ACTIVE");
       idx.set(ko, {
         namaOutlet: cell(row, iNO),
         alamat: cell(row, iAlamat),
         salesman: sls,
-        rayon: cell(row, iRayon),
+        rayon: ryRow,
         cycle: cell(row, iCycle),
+        alt: null,          // penugasan tambahan: [{ s: salesman, r: rayon }]
       });
       if (sls) {
         let lst = bySalesman.get(sls);
@@ -431,9 +464,11 @@
         lst.push(ko);
       }
       count++;
+      if (isAktif) aktif++;
     }
     state.dmpBySalesman = bySalesman;
-    return { index: idx, count };
+    state.dmpStats = { total: count, aktif, mati: count - aktif, salesman: bySalesman.size, ganda };
+    return { index: idx, count, aktif };
   }
 
   // Legacy alias, sekarang unified ke readAsAoA.
@@ -556,7 +591,12 @@
       // Dashboard 1 (EDI) — butuh EDI.
       if (!state.ediFile) {
         const parts = [];
-        if (dmpCount) parts.push(`DMP: ${dmpCount.toLocaleString("id-ID")} outlet`);
+        if (dmpCount) {
+          const st = state.dmpStats;
+          parts.push(st && st.mati
+            ? `DMP: ${st.aktif.toLocaleString("id-ID")} outlet aktif (dari ${st.total.toLocaleString("id-ID")})`
+            : `DMP: ${dmpCount.toLocaleString("id-ID")} outlet`);
+        }
         if (d2Msg) parts.push(d2Msg);
         parts.push("EDI tidak dipilih — Validasi Kunjungan dilewati");
         setStatus(parts.join(" · "), "ok");
@@ -626,7 +666,15 @@
       applyFilters();
       $("resultSection").classList.remove("hidden");
       const msg = [`${results.length.toLocaleString("id-ID")} kunjungan`];
-      if (dmpCount) msg.push(`${dmpCount.toLocaleString("id-ID")} outlet DMP`);
+      if (dmpCount) {
+        const st = state.dmpStats;
+        // Sebut yang aktif saja. Angka total DMP menyertakan outlet Non Active
+        // (tanpa salesman, tanpa rayon) sehingga menyesatkan kalau dipakai
+        // sebagai "jumlah outlet".
+        msg.push(st && st.mati
+          ? `${st.aktif.toLocaleString("id-ID")} outlet DMP aktif (dari ${st.total.toLocaleString("id-ID")})`
+          : `${dmpCount.toLocaleString("id-ID")} outlet DMP`);
+      }
       if (d2Msg) msg.push(d2Msg);
       if (state.hhtFile) {
         const matched = results.filter((r) => r.hht).length;
@@ -979,6 +1027,7 @@
     placeMenu,
     getDmpIndex: () => state.dmpIndex,
     getDmpBySalesman: () => state.dmpBySalesman || new Map(),
+    getDmpStats: () => state.dmpStats || null,
     getFiles: () => ({ lbp: state.lbpFile }),
     onLbpFile: (f) => { state.lbpFile = f; },
     showDash,

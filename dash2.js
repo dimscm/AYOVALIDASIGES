@@ -213,8 +213,7 @@
     // coverage — termasuk outlet yang belum pernah transaksi sama sekali.
     const outlets = new Map();
     for (const u of uni) {
-      if (sms.size && !sms.has(u.salesman)) continue;
-      if (rys.size && !rys.has(u.rayon)) continue;
+      if (!outletLolos(u, sms, rys)) continue;
       outlets.set(u.id, { ...u, groups: new Set(), karton: 0, amount: 0 });
     }
 
@@ -264,6 +263,19 @@
   // Daftar outlet resmi diambil dari DMP: semua outlet milik salesman yang
   // muncul di LBP. Outlet yang punya transaksi tapi tidak ada di DMP tetap
   // dimasukkan supaya tidak ada penjualan yang hilang dari hitungan.
+  // Satu outlet bisa punya beberapa penugasan (salesman + rayon). Outlet lolos
+  // kalau ADA SATU penugasan yang memenuhi filter salesman DAN filter rayon
+  // sekaligus — bukan dicocokkan terpisah, supaya "salesman A + rayon R02"
+  // tidak ikut memunculkan outlet yang sebenarnya milik A di rayon R06.
+  function outletLolos(u, sms, rys) {
+    if (!sms.size && !rys.size) return true;
+    const cocok = (sl, ry) =>
+      (!sms.size || sms.has(sl)) && (!rys.size || rys.has(ry));
+    if (cocok(u.salesman, u.rayon)) return true;
+    if (u.alt) { for (const a of u.alt) if (cocok(a.s, a.r)) return true; }
+    return false;
+  }
+
   function buildUniverse() {
     if (S.universe) return;
     const st = S.store, L = st.list;
@@ -277,12 +289,17 @@
       for (const id of codes) {
         if (seen.has(id)) continue;
         const d = S.dmpIndex.get(id);
+        // Simpan SEMUA penugasan outlet ini (salesman + rayon). Satu outlet
+        // bisa dipegang lebih dari satu salesman; kalau hanya disimpan satu,
+        // salesman yang lain jumlah outletnya jadi kurang dari DMP.
         seen.set(id, {
           id,
           nama: (d && d.namaOutlet) || "",
           salesman: (d && d.salesman) || sls,
           rayon: (d && d.rayon) || "",
+          alt: (d && d.alt) || null,
           diDmp: true,
+          dariDaftarDmp: true,   // masuk lewat daftar resmi salesman di DMP
         });
       }
     }
@@ -305,6 +322,7 @@
         nama: (d && d.namaOutlet) || st.outletNama[oi] || "",
         salesman,
         rayon: (d && d.rayon) || "",
+        alt: (d && d.alt) || null,
         diDmp: !!d,
       });
     }
@@ -312,6 +330,83 @@
     S.universe = [...seen.values()];
     S.universeAt = seen;
     S.allGroups = [...new Set(L.group)].filter(Boolean);
+
+    // Rekam asal-usul angka supaya selisih dengan total DMP bisa dijelaskan
+    // ke pengguna, bukan cuma muncul sebagai angka yang tidak nyambung.
+    const dmpSalesmen = new Set(bySls.keys());
+    let punyaSalesmanBeverage = 0, tambahanTransaksi = 0;
+    for (const o of S.universe) {
+      if (o.dariDaftarDmp) punyaSalesmanBeverage++;
+      else tambahanTransaksi++;
+    }
+    // Baris DMP mana yang kebetulan duluan tidak boleh menentukan siapa pemilik
+    // outlet. Kalau salah satu penugasan milik salesman yang ada di LBP, dia yang
+    // dijadikan utama. Sisanya — outlet yang transaksi beverage tapi di DMP
+    // terdaftar atas salesman non-beverage — diberi label jelas supaya tidak
+    // tertukar dengan territory salesman beverage yang jumlahnya mengikuti DMP.
+    for (const e of seen.values()) {
+      if (!e.diDmp || salesmenInLbp.has(e.salesman)) continue;
+      const hit = e.alt && e.alt.find((a) => salesmenInLbp.has(a.s));
+      if (hit) {
+        const oldS = e.salesman, oldR = e.rayon;
+        e.salesman = hit.s;
+        e.rayon = hit.r;
+        // Bikin array baru, jangan ubah alt milik dmpIndex yang dipakai bersama.
+        e.alt = e.alt.filter((a) => a !== hit).concat([{ s: oldS, r: oldR }]);
+      } else if (e.salesman && e.salesman !== "(tanpa salesman di DMP)") {
+        e.salesman = `${e.salesman} (bukan salesman beverage)`;
+      }
+    }
+
+    S.salesmenInLbp = salesmenInLbp;
+    S.funnel = {
+      dmpSalesmen: dmpSalesmen.size,
+      lbpSalesmen: salesmenInLbp.size,
+      salesmanCocok: [...salesmenInLbp].filter((x) => dmpSalesmen.has(x)).length,
+      punyaSalesmanBeverage,
+      tambahanTransaksi,
+      universe: S.universe.length,
+    };
+  }
+
+  // Menjelaskan dari mana angka "outlet" di dashboard ini berasal, lengkap
+  // dengan angka asli file yang barusan diupload.
+  function renderFunnel() {
+    const box = $("d2Funnel");
+    if (!box) return;
+    const f = S.funnel;
+    const stats = (window.M3 && window.M3.getDmpStats && window.M3.getDmpStats()) || null;
+    if (!f) { box.innerHTML = ""; return; }
+    const rows = [];
+    if (stats) {
+      rows.push(["Outlet di file DMP", stats.total, ""]);
+      if (stats.mati) rows.push(["Outlet Non Active (tanpa salesman & rayon)", -stats.mati, "minus"]);
+      rows.push(["Outlet DMP aktif", stats.aktif, "sub"]);
+    }
+    rows.push([`Salesman di DMP: ${fmtInt(f.dmpSalesmen)} · muncul di LBP: ${fmtInt(f.salesmanCocok)}`, null, "note"]);
+    rows.push(["Outlet milik salesman yang ada di LBP", f.punyaSalesmanBeverage, ""]);
+    if (f.tambahanTransaksi) {
+      rows.push(["Outlet lain yang tetap ada transaksinya", f.tambahanTransaksi, ""]);
+    }
+    rows.push(["Dipakai sebagai penyebut coverage", f.universe, "total"]);
+
+    box.innerHTML =
+      `<div class="funnel-title">Kenapa angkanya tidak sama dengan total DMP?</div>` +
+      rows.map(([label, val, cls]) =>
+        `<div class="funnel-row ${cls}"><span>${window.M3.escapeHtml(label)}</span>` +
+        `<b>${val == null ? "" : (val < 0 ? "−" : "") + fmtInt(Math.abs(val))}</b></div>`
+      ).join("") +
+      `<p class="funnel-note">DMP tetap master: kalau difilter per salesman, jumlah outletnya ` +
+      `<b>persis sama dengan DMP</b> (sudah dicek untuk seluruh ${fmtInt(f.salesmanCocok)} salesman). ` +
+      `Angka total di atas lebih kecil karena dua hal: outlet <b>Non Active</b> di DMP tidak punya ` +
+      `salesman maupun rayon sama sekali, dan outlet milik salesman yang tidak menjual beverage ` +
+      `tidak ada di file LBP.</p>` +
+      (stats && stats.ganda
+        ? `<p class="funnel-note">Catatan: ${fmtInt(stats.ganda)} penugasan di DMP memakai outlet yang ` +
+          `sama untuk salesman berbeda (sering kali rayonnya juga beda). Outlet begini dihitung ` +
+          `<b>sekali</b> di total, tapi tetap muncul di masing-masing salesman — jadi wajar kalau ` +
+          `jumlah per salesman dijumlahkan hasilnya lebih besar dari total.</p>`
+        : "");
   }
 
   // ---------- Rendering ----------
@@ -603,8 +698,22 @@
 
       // Filter diisi dari daftar outlet resmi (DMP), bukan cuma yang bertransaksi.
       buildUniverse();
-      const salesmen = [...new Set(S.universe.map((o) => o.salesman).filter(Boolean))].sort();
-      const rayons = [...new Set(S.universe.map((o) => o.rayon).filter(Boolean))].sort();
+      // Ikutkan penugasan tambahan, kalau tidak salesman yang semua outletnya
+      // dipegang bareng orang lain bisa hilang sama sekali dari daftar filter.
+      // Penugasan tambahan hanya diikutkan kalau salesmannya memang ada di LBP.
+      // Salesman non-beverage yang kebetulan berbagi outlet tidak dimunculkan,
+      // karena kalau dipilih hanya sebagian kecil wilayahnya yang tampil.
+      const inLbp = S.salesmenInLbp || new Set();
+      const smSet = new Set(), rySet = new Set();
+      for (const o of S.universe) {
+        if (o.salesman) smSet.add(o.salesman);
+        if (o.rayon) rySet.add(o.rayon);
+        if (o.alt) for (const a of o.alt) {
+          if (a.s && inLbp.has(a.s)) { smSet.add(a.s); if (a.r) rySet.add(a.r); }
+        }
+      }
+      const salesmen = [...smSet].sort();
+      const rayons = [...rySet].sort();
       fillList("d2FilterSalesmanList", salesmen, "d2SalesmanItem", S.ctrls.smCtrl, refresh);
       fillList("d2FilterRayonList", rayons, "d2RayonItem", S.ctrls.ryCtrl, refresh);
       fillList("d2FilterPeriodeList", periodes, "d2PeriodeItem", S.ctrls.pdCtrl, refresh);
@@ -612,10 +721,11 @@
         () => { computeGap(); renderGap(); });
 
       refresh();
+      renderFunnel();
       $("d2ResultSection").classList.remove("hidden");
       const belum = S.universe.length - new Set(store.list.outlet).size;
       return `LBP ${fmtInt(cols.n)} baris → ${fmtInt(S.allGroups.length)} produk, `
-           + `${fmtInt(S.universe.length)} outlet DMP`
+           + `${fmtInt(S.universe.length)} outlet dihitung`
            + (belum > 0 ? ` (${fmtInt(belum)} belum transaksi)` : "");
     },
     reset() {
