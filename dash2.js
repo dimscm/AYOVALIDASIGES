@@ -477,6 +477,7 @@
       });
       menu.hidden = !willOpen;
       wrap.classList.toggle("open", willOpen);
+      if (willOpen) window.M3.placeMenu(wrap, menu);
     });
     document.addEventListener("click", (e) => {
       if (!wrap.contains(e.target)) { menu.hidden = true; wrap.classList.remove("open"); }

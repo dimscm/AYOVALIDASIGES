@@ -773,6 +773,23 @@
   $("search").addEventListener("input", debounce(applyFilters, 200));
   $("filterInkonsisten").addEventListener("change", applyFilters);
 
+  // Tempatkan menu dropdown supaya selalu kelihatan: balik ke atas kalau ruang
+  // di bawah tombol tidak cukup, dan batasi tingginya ke ruang yang tersedia.
+  function placeMenu(wrap, menu) {
+    menu.classList.remove("up");
+    menu.style.maxHeight = "";
+    const r = wrap.getBoundingClientRect();
+    const below = window.innerHeight - r.bottom - 8;
+    const above = r.top - 8;
+    const need = menu.offsetHeight;
+    if (need > below && above > below) {
+      menu.classList.add("up");
+      if (need > above) menu.style.maxHeight = Math.max(140, above) + "px";
+    } else if (need > below) {
+      menu.style.maxHeight = Math.max(140, below) + "px";
+    }
+  }
+
   // Generic multi-select wiring (used by category + salesman)
   function wireMulti(wrapId, btnId, menuId, allId, itemClass, labelId, noun) {
     const wrap = $(wrapId), btn = $(btnId), menu = $(menuId), all = $(allId), label = $(labelId);
@@ -803,6 +820,7 @@
       });
       menu.hidden = !willOpen;
       wrap.classList.toggle("open", willOpen);
+      if (willOpen) placeMenu(wrap, menu);
     });
     document.addEventListener("click", (e) => {
       if (!wrap.contains(e.target)) { menu.hidden = true; wrap.classList.remove("open"); }
@@ -958,6 +976,7 @@
     escapeHtml,
     debounce,
     setStatus,
+    placeMenu,
     getDmpIndex: () => state.dmpIndex,
     getDmpBySalesman: () => state.dmpBySalesman || new Map(),
     getFiles: () => ({ lbp: state.lbpFile }),
