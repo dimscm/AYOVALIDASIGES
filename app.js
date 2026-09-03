@@ -198,6 +198,15 @@
     return { rows };
   }
 
+  // Alasan dari HHT detail (mis. "B4-Order By Phone", "B6-Tertutup Barang").
+  // Nilai " -" / "-" berarti tidak ada alasan tercatat.
+  function alasanHht(r) {
+    if (!r.hht) return "";
+    const a = String(r.hht.alasan || "").trim();
+    if (!a || a === "-" || a === "—") return "";
+    return a;
+  }
+
   function isScanned(hht) {
     // "TP SCAN" per kriteria = barcode benar-benar discan.
     // HHT Tipe Scan: "S" = Scan barcode, "M" = Manual input, blank/"-" = tidak.
@@ -298,6 +307,29 @@
     throw new Error("Format archive tidak dikenali: " + file.name);
   }
 
+  // Untuk file teks besar (mis. LBP 400rb+ baris): kembalikan raw text supaya
+  // pemanggil bisa iterasi per baris tanpa materialisasi AoA penuh di memori.
+  // Return null kalau sumbernya Excel (harus lewat readAsAoA).
+  async function readRawText(file) {
+    const nm = (file.name || "").toLowerCase();
+    if (nm.endsWith(".7z") || nm.endsWith(".zip") || nm.endsWith(".gz")) {
+      const { bytes, name } = await extractCompressed(file);
+      if (/\.(txt|csv|tsv)$/i.test(name)) return new TextDecoder("utf-8").decode(bytes);
+      return null;
+    }
+    if (nm.endsWith(".txt") || nm.endsWith(".csv") || nm.endsWith(".tsv")) return await file.text();
+    return null;
+  }
+
+  // Deteksi delimiter dari baris header.
+  function detectDelim(firstLine) {
+    if (firstLine.includes("|")) return "|";
+    if (firstLine.includes("\t")) return "\t";
+    if (firstLine.includes(";")) return ";";
+    if (firstLine.includes(",")) return ",";
+    return "|";
+  }
+
   // Universal reader: return array-of-arrays (AoA) dari sumber apa pun.
   // Excel, teks pipe/tab/csv, atau salah satunya di dalam archive.
   async function readAsAoA(file) {
@@ -372,7 +404,8 @@
   }
 
   function toggleProcess() {
-    $("processBtn").disabled = !state.ediFile;
+    // Bisa proses kalau ada EDI (Dashboard 1) atau LBP (Dashboard 2).
+    $("processBtn").disabled = !state.ediFile && !state.lbpFile;
   }
 
   $("ediFile").addEventListener("change", (e) => {
@@ -390,12 +423,19 @@
     $("dmpName").textContent = state.dmpFile ? state.dmpFile.name : "Belum ada file";
     toggleProcess();
   });
+  $("lbpFile").addEventListener("change", (e) => {
+    state.lbpFile = e.target.files[0];
+    $("lbpName").textContent = state.lbpFile ? state.lbpFile.name : "Belum ada file";
+    toggleProcess();
+  });
 
   $("resetBtn").addEventListener("click", () => {
-    state.ediFile = null; state.hhtFile = null; state.dmpFile = null;
+    state.ediFile = null; state.hhtFile = null; state.dmpFile = null; state.lbpFile = null;
     state.ediRows = []; state.hhtRows = []; state.dmpIndex = new Map(); state.results = []; state.filtered = [];
-    $("ediFile").value = ""; $("hhtFile").value = ""; $("dmpFile").value = "";
-    $("ediName").textContent = "Belum ada file"; $("hhtName").textContent = "Belum ada file"; $("dmpName").textContent = "Belum ada file";
+    $("ediFile").value = ""; $("hhtFile").value = ""; $("dmpFile").value = ""; $("lbpFile").value = "";
+    $("ediName").textContent = "Belum ada file"; $("hhtName").textContent = "Belum ada file";
+    $("dmpName").textContent = "Belum ada file"; $("lbpName").textContent = "Belum ada file";
+    if (window.M3D2) window.M3D2.reset();
     $("resultSection").classList.add("hidden");
     document.querySelectorAll(".filterCategoryItem").forEach((c) => (c.checked = false));
     document.querySelectorAll(".filterSalesmanItem").forEach((c) => (c.checked = false));
@@ -411,10 +451,37 @@
   });
 
   $("processBtn").addEventListener("click", async () => {
-    if (!state.ediFile) return;
+    if (!state.ediFile && !state.lbpFile) return;
     $("processBtn").disabled = true;
-    setStatus("Membaca EDI...");
     try {
+      // DMP dulu — dipakai Dashboard 1 maupun Dashboard 2.
+      state.dmpIndex = new Map();
+      let dmpCount = 0;
+      if (state.dmpFile) {
+        setStatus("Membaca DMP...");
+        const dmp = await parseDmp(state.dmpFile);
+        state.dmpIndex = dmp.index;
+        dmpCount = dmp.count;
+      }
+
+      // Dashboard 2 (LBP) — jalan kalau file LBP diupload.
+      let d2Msg = "";
+      if (state.lbpFile && window.M3D2) {
+        d2Msg = await window.M3D2.process(state.lbpFile, state.dmpIndex);
+      }
+
+      // Dashboard 1 (EDI) — butuh EDI.
+      if (!state.ediFile) {
+        const parts = [];
+        if (dmpCount) parts.push(`DMP: ${dmpCount.toLocaleString("id-ID")} outlet`);
+        if (d2Msg) parts.push(d2Msg);
+        parts.push("EDI tidak diupload — Dashboard 1 dilewati");
+        setStatus(parts.join(" · "), "ok");
+        showDash(2);
+        return;
+      }
+
+      setStatus("Membaca EDI...");
       const ediAoa = await readWorkbook(state.ediFile);
       state.ediRows = parseEdi(ediAoa);
       if (!state.ediRows.length) throw new Error("EDI tidak berisi baris data.");
@@ -431,15 +498,6 @@
           const k = String(h.custno);
           if (!state.scanIndex.has(k) || isScanned(h)) state.scanIndex.set(k, h);
         }
-      }
-
-      state.dmpIndex = new Map();
-      let dmpCount = 0;
-      if (state.dmpFile) {
-        setStatus("Membaca DMP...");
-        const dmp = await parseDmp(state.dmpFile);
-        state.dmpIndex = dmp.index;
-        dmpCount = dmp.count;
       }
 
       setStatus("Kategorisasi...");
@@ -483,6 +541,7 @@
       $("resultSection").classList.remove("hidden");
       const msg = [`Selesai · ${results.length.toLocaleString("id-ID")} baris`];
       if (dmpCount) msg.push(`DMP: ${dmpCount.toLocaleString("id-ID")} outlet`);
+      if (d2Msg) msg.push(d2Msg);
       if (state.hhtFile) {
         const matched = results.filter((r) => r.hht).length;
         const scanned = results.filter((r) => isScanned(r.hht)).length;
@@ -541,7 +600,7 @@
       if (onlyMixed && r.consistency !== "MIXED") return false;
       if (sms.size > 0 && !sms.has(r.salesmanEff)) return false;
       if (q) {
-        const hay = [r.custno, r.namaTokoEff, r.salesmanEff, r.rayonEff, r.alamatEff, r.alorReason]
+        const hay = [r.custno, r.namaTokoEff, r.salesmanEff, r.rayonEff, r.alamatEff, r.alorReason, alasanHht(r)]
           .map((x) => String(x || "").toLowerCase()).join(" ");
         if (!hay.includes(q)) return false;
       }
@@ -602,6 +661,7 @@
         <td>${escapeHtml(r.flagRadius || "BLANK")}</td>
         <td>${escapeHtml(r.distance !== null && r.distance !== undefined ? String(r.distance) : "")}</td>
         <td>${hhtCell}</td>
+        <td>${escapeHtml(alasanHht(r))}</td>
         <td>${escapeHtml(r.alorReason || "")}</td>
         <td>${escapeHtml(info.suggest)}</td>
       </tr>`;
@@ -729,6 +789,7 @@
         "Long Val": r.longVal ?? "",
         HHT: r.hht ? (r.hht.hht || "") : "",
         "Tipe Scan": r.hht ? (r.hht.tipeScan || "") : "",
+        "Alasan HHT": alasanHht(r),
         "Alor Reason": r.alorReason || "",
         Saran: info.suggest,
       };
@@ -744,4 +805,41 @@
     let t;
     return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
   }
+
+  // ---- Tab switching (Dashboard 1 / Dashboard 2) ----
+  const panels = {
+    1: ["dash1", "dash1b"],
+    2: ["dash2"],
+  };
+  function showDash(n) {
+    for (const [k, ids] of Object.entries(panels)) {
+      const on = String(k) === String(n);
+      for (const id of ids) {
+        const el = $(id);
+        if (el) el.hidden = !on;
+      }
+    }
+    $("tab1").classList.toggle("active", String(n) === "1");
+    $("tab2").classList.toggle("active", String(n) === "2");
+    $("tab1").setAttribute("aria-selected", String(n) === "1");
+    $("tab2").setAttribute("aria-selected", String(n) === "2");
+  }
+  $("tab1").addEventListener("click", () => showDash(1));
+  $("tab2").addEventListener("click", () => showDash(2));
+
+  // ---- Shared surface for dash2.js ----
+  // dash2 reuses the same universal file readers and the DMP outlet index.
+  window.M3 = {
+    readAsAoA,
+    readRawText,
+    detectDelim,
+    parseDelimitedText,
+    escapeHtml,
+    debounce,
+    setStatus,
+    getDmpIndex: () => state.dmpIndex,
+    getFiles: () => ({ lbp: state.lbpFile }),
+    onLbpFile: (f) => { state.lbpFile = f; },
+    showDash,
+  };
 })();

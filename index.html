@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Ayo Validasi GES - Cek Kriteria Flag Radius</title>
-  <link rel="stylesheet" href="styles.css?v=11" />
+  <title>M3 Beverage Mayora</title>
+  <link rel="stylesheet" href="styles.css?v=12" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23c8102e'/%3E%3Ctext x='50' y='62' font-size='34' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EM3%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -12,13 +12,26 @@
     <div class="brand">
       <div class="logo">M3</div>
       <div>
-        <h1>Ayo Validasi GES</h1>
-        <p class="sub">Cek Flag Radius &amp; Scan berdasarkan EDI + HHT</p>
+        <h1>M3 &mdash; Beverage Mayora</h1>
+        <p class="sub">Validasi kunjungan &amp; coverage produk</p>
       </div>
     </div>
   </header>
 
+  <nav class="tabs" role="tablist">
+    <div class="tabs-inner">
+      <button class="tab active" id="tab1" role="tab" aria-selected="true" aria-controls="dash1">
+        <span class="tab-n">01</span> Flag Radius &amp; Scan
+      </button>
+      <button class="tab" id="tab2" role="tab" aria-selected="false" aria-controls="dash2">
+        <span class="tab-n">02</span> Outlet Aktif per Produk
+      </button>
+    </div>
+  </nav>
+
   <main>
+    <!-- ===== Dashboard 1 ===== -->
+    <div id="dash1" role="tabpanel">
     <!-- Kriteria -->
     <section class="card">
       <h2>CARA CEK</h2>
@@ -84,25 +97,26 @@
         </ol>
       </details>
     </section>
+    </div><!-- /dash1 head -->
 
-    <!-- Upload -->
-    <section class="card">
+    <!-- Upload (shared) -->
+    <section class="card" id="uploadCard">
       <h2>Upload File</h2>
       <div class="uploads">
         <label class="drop">
           <input type="file" id="ediFile" accept=".xlsx,.xls,.txt,.csv,.7z,.zip,.gz" />
           <div>
-            <b>EDI Flag Radius</b>
-            <p>Excel dari Matriks (<code>.xlsx</code>/<code>.xls</code>), teks pipe-delimited (<code>.txt</code>/<code>.csv</code>), atau langsung archive-nya (<code>.7z</code>/<code>.zip</code>/<code>.gz</code>). Kolom: FLAG RADIUS, CUSTNO, dst.</p>
+            <b>EDI Flag Radius <span class="badge-d1">D1</span></b>
+            <p>Excel (<code>.xlsx</code>/<code>.xls</code>), teks pipe-delimited (<code>.txt</code>/<code>.csv</code>), atau archive-nya (<code>.7z</code>/<code>.zip</code>/<code>.gz</code>). Kolom: FLAG RADIUS, CUSTNO, dst.</p>
             <p class="filename" id="ediName">Belum ada file</p>
           </div>
         </label>
 
         <label class="drop">
-          <input type="file" id="hhtFile" accept=".xlsx,.xls" />
+          <input type="file" id="hhtFile" accept=".xlsx,.xls,.txt,.csv,.7z,.zip,.gz" />
           <div>
-            <b>HHT / Scan (opsional)</b>
-            <p>File Excel monitoring HHT untuk cek TP SCAN / TDK SCAN.</p>
+            <b>HHT / Scan <span class="badge-d1">D1</span></b>
+            <p>Monitoring HHT untuk cek TP SCAN / TDK SCAN + alasan tidak scan.</p>
             <p class="filename" id="hhtName">Belum ada file</p>
           </div>
         </label>
@@ -110,9 +124,18 @@
         <label class="drop">
           <input type="file" id="dmpFile" accept=".txt,.csv,.xlsx,.xls,.zip,.gz,.7z" />
           <div>
-            <b>Master Data DMP (opsional)</b>
-            <p>Teks pipe-delimited (<code>.txt</code>/<code>.csv</code>), Excel (<code>.xlsx</code>/<code>.xls</code>), atau archive-nya (<code>.7z</code>/<code>.zip</code>/<code>.gz</code>). Sumber utama Nama Outlet, Salesman, Alamat, Rayon.</p>
+            <b>Master Data DMP <span class="badge-both">D1+D2</span></b>
+            <p>Master outlet: Kode Outlet, Nama Outlet, Salesman, Rayon, Alamat. Teks / Excel / archive.</p>
             <p class="filename" id="dmpName">Belum ada file</p>
+          </div>
+        </label>
+
+        <label class="drop">
+          <input type="file" id="lbpFile" accept=".txt,.csv,.xlsx,.xls,.zip,.gz,.7z" />
+          <div>
+            <b>LBP (Laporan Penjualan) <span class="badge-d2">D2</span></b>
+            <p>Laporan hasil penjualan per faktur. Kolom isi &amp; karton dihitung otomatis dari Kemasan &amp; QTYPCS.</p>
+            <p class="filename" id="lbpName">Belum ada file</p>
           </div>
         </label>
       </div>
@@ -124,6 +147,7 @@
       </div>
     </section>
 
+    <div id="dash1b" role="tabpanel">
     <!-- Hasil -->
     <section class="card hidden" id="resultSection">
       <h2>Ringkasan</h2>
@@ -185,6 +209,7 @@
               <th>Flag Radius</th>
               <th>Distance</th>
               <th>HHT / Tipe Scan</th>
+              <th>Alasan HHT</th>
               <th>Alor Reason</th>
               <th>Saran</th>
             </tr>
@@ -198,13 +223,144 @@
         <button id="nextPage" class="ghost">Next &rarr;</button>
       </div>
     </section>
+    </div><!-- /dash1b -->
 
-    <p class="foot">Dibuat untuk tim validasi. Semua pemrosesan berjalan lokal di browser Anda — file tidak diunggah ke server. <span class="ver">v11</span></p>
+    <!-- ===== Dashboard 2 ===== -->
+    <div id="dash2" role="tabpanel" hidden>
+      <section class="card">
+        <h2>Cara Baca Dashboard 2</h2>
+        <p class="sub-desc">Gabungkan <b>Master Data DMP</b> (identitas outlet) dengan <b>LBP</b> (transaksi penjualan) untuk lihat outlet mana yang <b>sudah</b> dan <b>belum</b> transaksi di tiap produk.</p>
+        <div class="criteria-grid">
+          <div class="crit crit-d2-isi">
+            <h3>Kolom <code>isi</code></h3>
+            <p>Diambil dari <b>Kemasan mulai karakter ke-5</b>. Contoh <code>CAR/24 ,BOT/1 ,BOT</code> → isi = <b>24</b>.</p>
+          </div>
+          <div class="crit crit-d2-karton">
+            <h3>Kolom <code>karton</code></h3>
+            <p><code>QTYPCS ÷ isi</code>. Contoh 6.000 pcs ÷ 12 = <b>500 karton</b>.</p>
+          </div>
+          <div class="crit crit-d2-group">
+            <h3>Grup Produk</h3>
+            <p>Kode barang yang produknya sama digabung. Contoh <b>Le Minerale 600ML</b> punya 4 kode (Reguler, Pesta Bola, Promo Gosok) → jadi 1 grup.</p>
+          </div>
+          <div class="crit crit-d2-gap">
+            <h3>Belum Transaksi</h3>
+            <p>Outlet yang <b>ada di LBP</b> (aktif beli produk lain) tapi <b>tidak pernah</b> beli produk yang dipilih. Ini target penetrasi.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="card hidden" id="d2ResultSection">
+        <h2>Ringkasan Penjualan</h2>
+        <div class="summary" id="d2Summary"></div>
+
+        <h2 style="margin-top: 24px;">Coverage per Produk</h2>
+        <div class="toolbar">
+          <div class="multi" id="d2FilterSalesman">
+            <button type="button" class="multi-btn" id="d2FilterSalesmanBtn">
+              <span id="d2FilterSalesmanLabel">Semua salesman</span>
+              <span class="chev">▾</span>
+            </button>
+            <div class="multi-menu wide" id="d2FilterSalesmanMenu" hidden>
+              <input type="search" id="d2FilterSalesmanSearch" class="multi-search" placeholder="Cari salesman..." />
+              <label class="multi-opt all" title="Klik untuk reset"><input type="checkbox" id="d2FilterSalesmanAll" checked /> ↺ Semua salesman (reset)</label>
+              <div class="multi-sep"></div>
+              <div id="d2FilterSalesmanList"></div>
+            </div>
+          </div>
+          <div class="multi" id="d2FilterPeriode">
+            <button type="button" class="multi-btn" id="d2FilterPeriodeBtn">
+              <span id="d2FilterPeriodeLabel">Semua periode</span>
+              <span class="chev">▾</span>
+            </button>
+            <div class="multi-menu" id="d2FilterPeriodeMenu" hidden>
+              <label class="multi-opt all" title="Klik untuk reset"><input type="checkbox" id="d2FilterPeriodeAll" checked /> ↺ Semua periode (reset)</label>
+              <div class="multi-sep"></div>
+              <div id="d2FilterPeriodeList"></div>
+            </div>
+          </div>
+          <label class="check-toggle" title="Hitung retur (TRANSTYPE R) sebagai transaksi">
+            <input type="checkbox" id="d2InclRetur" />
+            <span>Ikutkan retur</span>
+          </label>
+          <button id="d2ExportCoverage" class="ghost">Export Coverage</button>
+          <span id="d2CoverageCount" class="count"></span>
+        </div>
+        <div class="table-wrap">
+          <table id="d2CoverageTable">
+            <thead>
+              <tr>
+                <th>Grup Produk</th>
+                <th>Kode Barang</th>
+                <th>Outlet Beli</th>
+                <th>Belum Beli</th>
+                <th>Coverage</th>
+                <th>Total Karton</th>
+                <th>Total Pcs</th>
+                <th>Nilai (Rp)</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <h2 style="margin-top: 28px;">Outlet Belum Transaksi</h2>
+        <p class="sub-desc">Pilih satu atau beberapa produk, lalu lihat daftar outlet yang belum pernah beli produk tersebut.</p>
+        <div class="toolbar">
+          <input type="search" id="d2Search" placeholder="Cari nama outlet, kode outlet, salesman, rayon..." />
+          <div class="multi" id="d2FilterProduk">
+            <button type="button" class="multi-btn" id="d2FilterProdukBtn">
+              <span id="d2FilterProdukLabel">Pilih produk...</span>
+              <span class="chev">▾</span>
+            </button>
+            <div class="multi-menu wide" id="d2FilterProdukMenu" hidden>
+              <input type="search" id="d2FilterProdukSearch" class="multi-search" placeholder="Cari produk..." />
+              <label class="multi-opt all" title="Klik untuk reset"><input type="checkbox" id="d2FilterProdukAll" checked /> ↺ Semua produk (reset)</label>
+              <div class="multi-sep"></div>
+              <div id="d2FilterProdukList"></div>
+            </div>
+          </div>
+          <select id="d2GapMode">
+            <option value="ANY">Belum beli SALAH SATU produk terpilih</option>
+            <option value="ALL">Belum beli SEMUA produk terpilih</option>
+            <option value="BOUGHT">Sudah beli (kebalikan)</option>
+          </select>
+          <button id="d2ExportGap" class="ghost">Export Excel</button>
+          <span id="d2GapCount" class="count"></span>
+        </div>
+        <div class="table-wrap">
+          <table id="d2GapTable">
+            <thead>
+              <tr>
+                <th>Kode Outlet</th>
+                <th>Nama Outlet</th>
+                <th>Salesman</th>
+                <th>Rayon</th>
+                <th>Produk Belum Dibeli</th>
+                <th>Jumlah Grup Dibeli</th>
+                <th>Total Karton</th>
+                <th>Total Nilai (Rp)</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="pager">
+          <button id="d2PrevPage" class="ghost">&larr; Prev</button>
+          <span id="d2PageInfo"></span>
+          <button id="d2NextPage" class="ghost">Next &rarr;</button>
+        </div>
+      </section>
+    </div><!-- /dash2 -->
+
+    <p class="foot">Semua pemrosesan berjalan lokal di browser Anda — file tidak diunggah ke server. <span class="ver">v12</span></p>
+    <p class="credit">dimscm</p>
   </main>
 
   <script src="vendor/xlsx.full.min.js"></script>
   <script src="vendor/jszip.min.js"></script>
   <script src="vendor/7zz.umd.js"></script>
-  <script src="app.js?v=11"></script>
+  <script src="app.js?v=12"></script>
+  <script src="dash2.js?v=12"></script>
 </body>
 </html>
