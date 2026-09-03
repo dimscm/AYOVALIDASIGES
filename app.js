@@ -409,6 +409,7 @@
     const iCycle = cols.indexOf("CYCLE");
     const cell = (row, i) => i >= 0 && row[i] != null ? String(row[i]).trim() : "";
     const idx = new Map();
+    const bySalesman = new Map();   // salesman -> [kode outlet] (DMP itu master outlet)
     let count = 0;
     for (let r = 1; r < rows.length; r++) {
       const row = rows[r] || [];
@@ -416,15 +417,22 @@
       if (!ko || idx.has(ko)) continue;
       // Hanya simpan kolom yang benar-benar dipakai — DMP bisa 150rb baris,
       // menyimpan kolom yang tidak terpakai memboroskan memori (berat di HP).
+      const sls = cell(row, iSls);
       idx.set(ko, {
         namaOutlet: cell(row, iNO),
         alamat: cell(row, iAlamat),
-        salesman: cell(row, iSls),
+        salesman: sls,
         rayon: cell(row, iRayon),
         cycle: cell(row, iCycle),
       });
+      if (sls) {
+        let lst = bySalesman.get(sls);
+        if (!lst) { lst = []; bySalesman.set(sls, lst); }
+        lst.push(ko);
+      }
       count++;
     }
+    state.dmpBySalesman = bySalesman;
     return { index: idx, count };
   }
 
@@ -530,6 +538,7 @@
     try {
       // DMP dulu — dipakai Dashboard 1 maupun Dashboard 2.
       state.dmpIndex = new Map();
+      state.dmpBySalesman = new Map();
       let dmpCount = 0;
       if (state.dmpFile) {
         setStatus("Membaca DMP...");
@@ -541,7 +550,7 @@
       // Dashboard 2 (LBP) — jalan kalau file LBP diupload.
       let d2Msg = "";
       if (state.lbpFile && window.M3D2) {
-        d2Msg = await window.M3D2.process(state.lbpFile, state.dmpIndex);
+        d2Msg = await window.M3D2.process(state.lbpFile, state.dmpIndex, state.dmpBySalesman);
       }
 
       // Dashboard 1 (EDI) — butuh EDI.
@@ -950,6 +959,7 @@
     debounce,
     setStatus,
     getDmpIndex: () => state.dmpIndex,
+    getDmpBySalesman: () => state.dmpBySalesman || new Map(),
     getFiles: () => ({ lbp: state.lbpFile }),
     onLbpFile: (f) => { state.lbpFile = f; },
     showDash,

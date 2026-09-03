@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>M3 Beverage Mayora</title>
-  <link rel="stylesheet" href="styles.css?v=14" />
+  <link rel="stylesheet" href="styles.css?v=15" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23c8102e'/%3E%3Ctext x='50' y='62' font-size='34' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EM3%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -214,7 +214,7 @@
               <div class="h-item info"><b>isi</b><span>Angka mulai karakter ke-5 dari Kemasan. <code>CAR/24 ,BOT/1 ,BOT</code> → 24.</span></div>
               <div class="h-item info"><b>karton</b><span><code>QTYPCS ÷ isi</code>. 6.000 pcs ÷ 12 = 500 karton.</span></div>
               <div class="h-item warn"><b>Grup produk</b><span>Kode barang dengan produk sama digabung. Le Minerale 600ML = 4 kode jadi 1.</span></div>
-              <div class="h-item bad"><b>Belum transaksi</b><span>Outlet aktif beli produk lain, tapi belum pernah beli produk yang dipilih.</span></div>
+              <div class="h-item bad"><b>Daftar outlet dari DMP</b><span>Jumlah outlet per salesman mengikuti DMP. Outlet yang belum pernah transaksi sama sekali tetap dihitung dan ditandai.</span></div>
             </div>
           </div>
         </details>
@@ -233,6 +233,16 @@
               <label class="multi-opt all"><input type="checkbox" id="d2FilterSalesmanAll" checked /> ↺ Semua salesman</label>
               <div class="multi-sep"></div>
               <div id="d2FilterSalesmanList"></div>
+            </div>
+          </div>
+          <div class="multi" id="d2FilterRayon">
+            <button type="button" class="multi-btn" id="d2FilterRayonBtn">
+              <span id="d2FilterRayonLabel">Semua rayon</span><span class="chev">▾</span>
+            </button>
+            <div class="multi-menu" id="d2FilterRayonMenu" hidden>
+              <label class="multi-opt all"><input type="checkbox" id="d2FilterRayonAll" checked /> ↺ Semua rayon</label>
+              <div class="multi-sep"></div>
+              <div id="d2FilterRayonList"></div>
             </div>
           </div>
           <div class="multi" id="d2FilterPeriode">
@@ -318,13 +328,13 @@
       </section>
     </div>
 
-    <p class="credit">dimscm &middot; v14</p>
+    <p class="credit">dimscm &middot; v15</p>
   </main>
 
   <script src="vendor/xlsx.full.min.js"></script>
   <script src="vendor/jszip.min.js"></script>
   <script src="vendor/7zz.umd.js"></script>
-  <script src="app.js?v=14"></script>
-  <script src="dash2.js?v=14"></script>
+  <script src="app.js?v=15"></script>
+  <script src="dash2.js?v=15"></script>
 </body>
 </html>

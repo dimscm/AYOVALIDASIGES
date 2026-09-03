@@ -200,47 +200,36 @@
     const sms = new Set([...document.querySelectorAll(".d2SalesmanItem")].filter((c) => c.checked).map((c) => c.value));
     const pds = new Set([...document.querySelectorAll(".d2PeriodeItem")].filter((c) => c.checked).map((c) => c.value));
 
+    const rys = new Set([...document.querySelectorAll(".d2RayonItem")].filter((c) => c.checked).map((c) => c.value));
     const c = S.cols, st = S.store;
     if (!c) { S.outlets = new Map(); S.groups = new Map(); S.totalOutlet = 0; return; }
     const L = st.list;
 
-    // Identitas outlet (nama/salesman/rayon) dihitung sekali per outlet, bukan
-    // per baris — DMP dipakai kalau ada, kalau tidak jatuh ke nilai dari LBP.
-    if (!S.outletInfo) {
-      S.outletInfo = L.outlet.map((id, oi) => {
-        const d = S.dmpIndex.get(id);
-        return {
-          id,
-          nama: (d && d.namaOutlet) || st.outletNama[oi] || "",
-          salesman: (d && d.salesman) || st.lbpSalesmanOf[oi] || "",
-          rayon: (d && d.rayon) || "",
-        };
-      });
-    }
-    const info = S.outletInfo;
+    buildUniverse();
+    const uni = S.universe;               // daftar outlet resmi (dari DMP)
+    const uniAt = S.universeAt;           // outletId -> posisi di uni
 
-    // Filter diterjemahkan jadi lookup indeks sekali di depan, supaya loop
-    // per baris hanya membandingkan angka.
-    const okOutlet = sms.size ? new Uint8Array(info.length) : null;
-    if (okOutlet) for (let i = 0; i < info.length; i++) okOutlet[i] = sms.has(info[i].salesman) ? 1 : 0;
+    // Outlet yang lolos filter salesman & rayon. Ini yang jadi penyebut
+    // coverage — termasuk outlet yang belum pernah transaksi sama sekali.
+    const outlets = new Map();
+    for (const u of uni) {
+      if (sms.size && !sms.has(u.salesman)) continue;
+      if (rys.size && !rys.has(u.rayon)) continue;
+      outlets.set(u.id, { ...u, groups: new Set(), karton: 0, amount: 0 });
+    }
+
     const okPd = pds.size ? new Uint8Array(L.pd.length) : null;
     if (okPd) L.pd.forEach((v, i) => { okPd[i] = pds.has(v) ? 1 : 0; });
 
-    const outlets = new Map();   // outletId -> { id, nama, salesman, rayon, groups:Set, karton, amount }
     const groups = new Map();    // grup -> { group, pcodes:Set, outlets:Set, karton, pcs, amount }
 
     for (let i = 0; i < c.n; i++) {
       if (!inclRetur && c.retur[i]) continue;
       if (okPd && !okPd[c.pd[i]]) continue;
       const oi = c.outlet[i];
-      if (okOutlet && !okOutlet[oi]) continue;
+      const o = outlets.get(L.outlet[oi]);
+      if (!o) continue;              // outlet di luar filter aktif
 
-      const meta = info[oi];
-      let o = outlets.get(meta.id);
-      if (!o) {
-        o = { ...meta, groups: new Set(), karton: 0, amount: 0 };
-        outlets.set(meta.id, o);
-      }
       const gName = L.group[c.group[i]];
       o.groups.add(gName);
       o.karton += c.karton[i];
@@ -253,15 +242,76 @@
       }
       const pc = L.pcode[c.pcode[i]];
       if (pc) g.pcodes.add(pc);
-      g.outlets.add(meta.id);
+      g.outlets.add(o.id);
       g.karton += c.karton[i];
       g.pcs += c.qty[i];
       g.amount += c.amount[i];
     }
 
+    // Semua grup produk tetap muncul walau tidak ada transaksi di filter ini,
+    // supaya baris coverage tidak hilang begitu difilter.
+    for (const gName of S.allGroups) {
+      if (!groups.has(gName)) {
+        groups.set(gName, { group: gName, pcodes: new Set(), outlets: new Set(), karton: 0, pcs: 0, amount: 0 });
+      }
+    }
+
     S.outlets = outlets;
     S.groups = groups;
     S.totalOutlet = outlets.size;
+  }
+
+  // Daftar outlet resmi diambil dari DMP: semua outlet milik salesman yang
+  // muncul di LBP. Outlet yang punya transaksi tapi tidak ada di DMP tetap
+  // dimasukkan supaya tidak ada penjualan yang hilang dari hitungan.
+  function buildUniverse() {
+    if (S.universe) return;
+    const st = S.store, L = st.list;
+    const seen = new Map();
+
+    const salesmenInLbp = new Set(st.lbpSalesmanOf.filter(Boolean));
+    const bySls = S.dmpBySalesman || new Map();
+    for (const sls of salesmenInLbp) {
+      const codes = bySls.get(sls);
+      if (!codes) continue;
+      for (const id of codes) {
+        if (seen.has(id)) continue;
+        const d = S.dmpIndex.get(id);
+        seen.set(id, {
+          id,
+          nama: (d && d.namaOutlet) || "",
+          salesman: (d && d.salesman) || sls,
+          rayon: (d && d.rayon) || "",
+          diDmp: true,
+        });
+      }
+    }
+    // Outlet bertransaksi yang belum tercakup di atas.
+    // DMP tetap yang berkuasa soal kepemilikan outlet: kalau outletnya ada di
+    // DMP tapi kolom salesman-nya kosong, jangan dilimpahkan ke salesman dari
+    // LBP — nanti jumlah outlet salesman itu jadi lebih besar dari DMP.
+    for (let oi = 0; oi < L.outlet.length; oi++) {
+      const id = L.outlet[oi];
+      if (seen.has(id)) continue;
+      const d = S.dmpIndex.get(id);
+      let salesman;
+      if (d) salesman = d.salesman || "(tanpa salesman di DMP)";
+      else {
+        const s = st.lbpSalesmanOf[oi];
+        salesman = s ? `${s} (di luar DMP)` : "(di luar DMP)";
+      }
+      seen.set(id, {
+        id,
+        nama: (d && d.namaOutlet) || st.outletNama[oi] || "",
+        salesman,
+        rayon: (d && d.rayon) || "",
+        diDmp: !!d,
+      });
+    }
+
+    S.universe = [...seen.values()];
+    S.universeAt = seen;
+    S.allGroups = [...new Set(L.group)].filter(Boolean);
   }
 
   // ---------- Rendering ----------
@@ -279,16 +329,23 @@
   }
 
   function renderSummary() {
-    const total = S.totalOutlet;
+    const total = S.totalOutlet;               // outlet resmi dari DMP (setelah filter)
     const nGroups = S.groups.size;
-    let totKar = 0, totAmt = 0, sumGroupsPerOutlet = 0;
-    for (const o of S.outlets.values()) { totKar += o.karton; totAmt += o.amount; sumGroupsPerOutlet += o.groups.size; }
+    let totKar = 0, totAmt = 0, sumGroupsPerOutlet = 0, aktif = 0;
+    for (const o of S.outlets.values()) {
+      totKar += o.karton; totAmt += o.amount; sumGroupsPerOutlet += o.groups.size;
+      if (o.groups.size) aktif++;
+    }
+    const belum = total - aktif;
     const avg = total ? sumGroupsPerOutlet / total : 0;
     const card = (num, label, tone, sub) =>
       `<div class="stat ${tone || ""}"><b>${num}${sub ? ` <small>${sub}</small>` : ""}</b><span>${label}</span></div>`;
+    const pctAktif = total ? (aktif / total * 100).toFixed(1) + "%" : "";
     $("d2Summary").innerHTML = [
-      card(fmtInt(total), "Outlet transaksi", "info"),
-      card(fmtInt(nGroups), "Grup produk", "ok"),
+      card(fmtInt(total), "Outlet (DMP)", "info"),
+      card(fmtInt(aktif), "Sudah transaksi", "ok", pctAktif),
+      card(fmtInt(belum), "Belum transaksi", belum ? "bad" : "", ""),
+      card(fmtInt(nGroups), "Grup produk", "total"),
       card(fmtKar(avg), "Rata-rata produk / outlet", "warn"),
       card(fmtShort(totKar), "Total karton", "total", "karton"),
       card("Rp " + fmtShort(totAmt), "Total nilai", "total"),
@@ -366,11 +423,15 @@
       tb.innerHTML = `<tr><td colspan="8" class="empty">Tidak ada outlet yang cocok dengan filter ini.</td></tr>`;
     } else {
       tb.innerHTML = slice.map((o) => {
-        const miss = o.missing.length > 4
-          ? o.missing.slice(0, 4).map((m) => `<span class="pgap">${window.M3.escapeHtml(m)}</span>`).join(" ") +
-            ` <span class="pmore">+${o.missing.length - 4} lagi</span>`
-          : o.missing.map((m) => `<span class="pgap">${window.M3.escapeHtml(m)}</span>`).join(" ") || "<span class='pnone'>— sudah beli semua —</span>";
-        return `<tr>
+        // Outlet tanpa transaksi sama sekali ditandai khusus — ini prioritas utama.
+        const kosong = o.groups.size === 0;
+        const miss = kosong
+          ? `<span class="pnil">Belum transaksi apa pun</span>`
+          : o.missing.length > 4
+            ? o.missing.slice(0, 4).map((m) => `<span class="pgap">${window.M3.escapeHtml(m)}</span>`).join(" ") +
+              ` <span class="pmore">+${o.missing.length - 4} lagi</span>`
+            : o.missing.map((m) => `<span class="pgap">${window.M3.escapeHtml(m)}</span>`).join(" ") || "<span class='pnone'>— sudah beli semua —</span>";
+        return `<tr class="${kosong ? "row-nil" : ""}">
           <td class="mono">${window.M3.escapeHtml(o.id)}</td>
           <td>${window.M3.escapeHtml(o.nama)}</td>
           <td>${window.M3.escapeHtml(o.salesman)}</td>
@@ -446,7 +507,8 @@
   // ---------- Public API used by app.js ----------
 
   const S = {
-    store: null, cols: null, outletInfo: null, dmpIndex: new Map(),
+    store: null, cols: null, dmpIndex: new Map(), dmpBySalesman: new Map(),
+    universe: null, universeAt: null, allGroups: [],
     outlets: new Map(), groups: new Map(),
     coverageRows: [], gapRows: [], gapPage: 1, totalOutlet: 0,
   };
@@ -458,12 +520,14 @@
 
     const smCtrl = wireMulti("d2FilterSalesman", "d2FilterSalesmanBtn", "d2FilterSalesmanMenu",
       "d2FilterSalesmanAll", "d2SalesmanItem", "d2FilterSalesmanLabel", "salesman", refresh);
+    const ryCtrl = wireMulti("d2FilterRayon", "d2FilterRayonBtn", "d2FilterRayonMenu",
+      "d2FilterRayonAll", "d2RayonItem", "d2FilterRayonLabel", "rayon", refresh);
     const pdCtrl = wireMulti("d2FilterPeriode", "d2FilterPeriodeBtn", "d2FilterPeriodeMenu",
       "d2FilterPeriodeAll", "d2PeriodeItem", "d2FilterPeriodeLabel", "periode", refresh);
     const prCtrl = wireMulti("d2FilterProduk", "d2FilterProdukBtn", "d2FilterProdukMenu",
       "d2FilterProdukAll", "d2ProdukItem", "d2FilterProdukLabel", "produk",
       () => { computeGap(); renderGap(); });
-    S.ctrls = { smCtrl, pdCtrl, prCtrl };
+    S.ctrls = { smCtrl, ryCtrl, pdCtrl, prCtrl };
 
     $("d2FilterSalesmanSearch").addEventListener("input", (e) => {
       const q = e.target.value.trim().toLowerCase();
@@ -511,6 +575,7 @@
         "Nama Outlet": o.nama,
         Salesman: o.salesman,
         Rayon: o.rayon,
+        Status: o.groups.size ? "Ada transaksi" : "Belum transaksi apa pun",
         "Jumlah Produk Belum Dibeli": o.missing.length,
         "Produk Belum Dibeli": o.missing.join(", "),
         "Jumlah Grup Dibeli": o.groups.size,
@@ -525,29 +590,36 @@
   }
 
   window.M3D2 = {
-    async process(file, dmpIndex) {
+    async process(file, dmpIndex, dmpBySalesman) {
       window.M3.setStatus("Membaca LBP...");
       const { store, cols, periodes } = await parseLbp(file);
       S.store = store;
       S.cols = cols;
-      S.outletInfo = null;
+      S.universe = null; S.universeAt = null;
       S.dmpIndex = dmpIndex || new Map();
+      S.dmpBySalesman = dmpBySalesman || new Map();
       wireOnce();
 
-      // Populate filters from data
-      aggregate();
-      const salesmen = [...new Set(S.outletInfo.map((o) => o.salesman).filter(Boolean))].sort();
+      // Filter diisi dari daftar outlet resmi (DMP), bukan cuma yang bertransaksi.
+      buildUniverse();
+      const salesmen = [...new Set(S.universe.map((o) => o.salesman).filter(Boolean))].sort();
+      const rayons = [...new Set(S.universe.map((o) => o.rayon).filter(Boolean))].sort();
       fillList("d2FilterSalesmanList", salesmen, "d2SalesmanItem", S.ctrls.smCtrl, refresh);
+      fillList("d2FilterRayonList", rayons, "d2RayonItem", S.ctrls.ryCtrl, refresh);
       fillList("d2FilterPeriodeList", periodes, "d2PeriodeItem", S.ctrls.pdCtrl, refresh);
-      const groupNames = [...S.groups.keys()].sort();
-      fillList("d2FilterProdukList", groupNames, "d2ProdukItem", S.ctrls.prCtrl, () => { computeGap(); renderGap(); });
+      fillList("d2FilterProdukList", S.allGroups.slice().sort(), "d2ProdukItem", S.ctrls.prCtrl,
+        () => { computeGap(); renderGap(); });
 
       refresh();
       $("d2ResultSection").classList.remove("hidden");
-      return `LBP ${fmtInt(cols.n)} baris → ${fmtInt(S.groups.size)} produk, ${fmtInt(S.outlets.size)} outlet`;
+      const belum = S.universe.length - new Set(store.list.outlet).size;
+      return `LBP ${fmtInt(cols.n)} baris → ${fmtInt(S.allGroups.length)} produk, `
+           + `${fmtInt(S.universe.length)} outlet DMP`
+           + (belum > 0 ? ` (${fmtInt(belum)} belum transaksi)` : "");
     },
     reset() {
-      S.store = null; S.cols = null; S.outletInfo = null;
+      S.store = null; S.cols = null;
+      S.universe = null; S.universeAt = null; S.allGroups = [];
       S.outlets = new Map(); S.groups = new Map();
       S.coverageRows = []; S.gapRows = []; S.gapPage = 1; S.totalOutlet = 0;
       const rs = $("d2ResultSection");

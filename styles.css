@@ -295,6 +295,11 @@ body.full-cols .col-x { display: table-cell; }
 }
 .pmore { font-size: 10.5px; color: var(--muted); font-style: italic; }
 .pnone { font-size: 11px; color: var(--ok); }
+.pnil {
+  display: inline-block; padding: 2px 7px; border-radius: 3px;
+  background: var(--bad); color: #fff; font-size: 10.5px; font-weight: 600;
+}
+tr.row-nil td { background: #fffbfb; }
 
 /* ---------- Pager + credit ---------- */
 .pager { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 12px; }
