@@ -203,6 +203,15 @@
 
   const fmtInt = (n) => Math.round(n).toLocaleString("id-ID");
   const fmtKar = (n) => n.toLocaleString("id-ID", { maximumFractionDigits: 1 });
+  // Angka besar di kartu ringkasan dipadatkan supaya tetap satu baris.
+  function fmtShort(n) {
+    const a = Math.abs(n);
+    if (a >= 1e12) return (n / 1e12).toLocaleString("id-ID", { maximumFractionDigits: 1 }) + " T";
+    if (a >= 1e9)  return (n / 1e9).toLocaleString("id-ID",  { maximumFractionDigits: 1 }) + " M";
+    if (a >= 1e6)  return (n / 1e6).toLocaleString("id-ID",  { maximumFractionDigits: 1 }) + " jt";
+    if (a >= 1e4)  return (n / 1e3).toLocaleString("id-ID",  { maximumFractionDigits: 1 }) + " rb";
+    return fmtInt(n);
+  }
 
   function renderSummary() {
     const total = S.totalOutlet;
@@ -211,14 +220,15 @@
     for (const o of S.outlets.values()) { totKar += o.karton; totAmt += o.amount; sumGroupsPerOutlet += o.groups.size; }
     const avg = total ? sumGroupsPerOutlet / total : 0;
     const card = (num, label, tone, sub) =>
-      `<div class="stat ${tone || ""}"><b>${num}${sub ? ` <small style="font-size:12px;color:#6b7280;font-weight:400">${sub}</small>` : ""}</b><span>${label}</span></div>`;
+      `<div class="stat ${tone || ""}"><b>${num}${sub ? ` <small>${sub}</small>` : ""}</b><span>${label}</span></div>`;
     $("d2Summary").innerHTML = [
-      card(fmtInt(total), "Outlet aktif (ada transaksi)", "info"),
+      card(fmtInt(total), "Outlet transaksi", "info"),
       card(fmtInt(nGroups), "Grup produk", "ok"),
-      card(fmtKar(avg), "Rata-rata grup dibeli / outlet", "warn"),
-      card(fmtKar(totKar), "Total karton", ""),
-      card("Rp " + fmtInt(totAmt), "Total nilai", ""),
+      card(fmtKar(avg), "Rata-rata produk / outlet", "warn"),
+      card(fmtShort(totKar), "Total karton", "total", "karton"),
+      card("Rp " + fmtShort(totAmt), "Total nilai", "total"),
     ].join("");
+    $("d2Summary").lastElementChild.title = "Rp " + fmtInt(totAmt);
   }
 
   function renderCoverage() {
@@ -467,7 +477,7 @@
 
       refresh();
       $("d2ResultSection").classList.remove("hidden");
-      return `LBP: ${fmtInt(lines.length)} baris · ${fmtInt(S.groups.size)} grup produk · ${fmtInt(S.outlets.size)} outlet aktif`;
+      return `LBP ${fmtInt(lines.length)} baris → ${fmtInt(S.groups.size)} produk, ${fmtInt(S.outlets.size)} outlet`;
     },
     reset() {
       S.lines = []; S.outlets = new Map(); S.groups = new Map();

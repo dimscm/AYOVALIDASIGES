@@ -12,12 +12,12 @@
   };
 
   const CATEGORY_INFO = {
-    "1-SCAN":       { label: "FLAG 1 (IN RADIUS), TP SCAN",       tone: "ok",   suggest: "Paling valid. Tidak ada aksi." },
-    "1-NOSCAN":     { label: "FLAG 1 (IN RADIUS), TDK SCAN",      tone: "info", suggest: "Kemungkinan barcode belum discan. Cek ketersediaan barcode di toko." },
-    "0-SCAN":       { label: "FLAG 0 (OUT RADIUS), TP SCAN",      tone: "warn", suggest: "Kunjungi tapi validasi salah, atau fiktif barcode. Cocokan LongLat & alamat." },
-    "0-NOSCAN":     { label: "FLAG 0 (OUT RADIUS), TDK SCAN",     tone: "warn", suggest: "Kemungkinan tidak dikunjungi atau validasi salah. Validasi ulang." },
-    "BLANK-SCAN":   { label: "FLAG BLANK, TP SCAN",               tone: "info", suggest: "Belum ada validasi, barcode sudah ada. SOLUSI: scan barcode = validasi." },
-    "BLANK-NOSCAN": { label: "FLAG BLANK, TDK SCAN",              tone: "bad",  suggest: "Toko tidak ada / tidak ketemu. Cek ulang keberadaan toko." },
+    "1-SCAN":       { label: "Flag 1 + Scan",        tone: "ok",   suggest: "Valid. Tidak ada aksi." },
+    "1-NOSCAN":     { label: "Flag 1 + Tidak scan",  tone: "info", suggest: "Cek ketersediaan barcode di toko." },
+    "0-SCAN":       { label: "Flag 0 + Scan",        tone: "warn", suggest: "Titik validasi salah / fiktif barcode. Cocokan LongLat & alamat." },
+    "0-NOSCAN":     { label: "Flag 0 + Tidak scan",  tone: "warn", suggest: "Mungkin tidak dikunjungi. Validasi ulang." },
+    "BLANK-SCAN":   { label: "Blank + Scan",         tone: "info", suggest: "Scan barcode untuk memvalidasi." },
+    "BLANK-NOSCAN": { label: "Blank + Tidak scan",   tone: "bad",  suggest: "Cek ulang keberadaan toko." },
   };
 
   const CONSISTENCY_INFO = {
@@ -408,35 +408,33 @@
     $("processBtn").disabled = !state.ediFile && !state.lbpFile;
   }
 
-  $("ediFile").addEventListener("change", (e) => {
-    state.ediFile = e.target.files[0];
-    $("ediName").textContent = state.ediFile ? state.ediFile.name : "Belum ada file";
-    toggleProcess();
-  });
-  $("hhtFile").addEventListener("change", (e) => {
-    state.hhtFile = e.target.files[0];
-    $("hhtName").textContent = state.hhtFile ? state.hhtFile.name : "Belum ada file";
-    toggleProcess();
-  });
-  $("dmpFile").addEventListener("change", (e) => {
-    state.dmpFile = e.target.files[0];
-    $("dmpName").textContent = state.dmpFile ? state.dmpFile.name : "Belum ada file";
-    toggleProcess();
-  });
-  $("lbpFile").addEventListener("change", (e) => {
-    state.lbpFile = e.target.files[0];
-    $("lbpName").textContent = state.lbpFile ? state.lbpFile.name : "Belum ada file";
-    toggleProcess();
-  });
+  // Satu handler untuk keempat slot file: simpan, tandai baris, update tombol.
+  function wireFile(inputId, stateKey, nameId, rowId) {
+    $(inputId).addEventListener("change", (e) => {
+      const f = e.target.files[0];
+      state[stateKey] = f;
+      $(nameId).textContent = f ? f.name : "Belum dipilih";
+      $(rowId).classList.toggle("has", !!f);
+      toggleProcess();
+    });
+  }
+  wireFile("ediFile", "ediFile", "ediName", "rowEdi");
+  wireFile("hhtFile", "hhtFile", "hhtName", "rowHht");
+  wireFile("dmpFile", "dmpFile", "dmpName", "rowDmp");
+  wireFile("lbpFile", "lbpFile", "lbpName", "rowLbp");
 
   $("resetBtn").addEventListener("click", () => {
     state.ediFile = null; state.hhtFile = null; state.dmpFile = null; state.lbpFile = null;
     state.ediRows = []; state.hhtRows = []; state.dmpIndex = new Map(); state.results = []; state.filtered = [];
     $("ediFile").value = ""; $("hhtFile").value = ""; $("dmpFile").value = ""; $("lbpFile").value = "";
-    $("ediName").textContent = "Belum ada file"; $("hhtName").textContent = "Belum ada file";
-    $("dmpName").textContent = "Belum ada file"; $("lbpName").textContent = "Belum ada file";
+    $("ediName").textContent = "Belum dipilih"; $("hhtName").textContent = "Belum dipilih";
+    $("dmpName").textContent = "Belum dipilih"; $("lbpName").textContent = "Belum dipilih";
+    ["rowEdi", "rowHht", "rowDmp", "rowLbp"].forEach((id) => $(id).classList.remove("has"));
     if (window.M3D2) window.M3D2.reset();
     $("resultSection").classList.add("hidden");
+    $("uploadCard").classList.remove("hidden");
+    $("loadedBar").classList.add("hidden");
+    $("tabs").classList.add("hidden");
     document.querySelectorAll(".filterCategoryItem").forEach((c) => (c.checked = false));
     document.querySelectorAll(".filterSalesmanItem").forEach((c) => (c.checked = false));
     const catAll = $("filterCategoryAll"); if (catAll) catAll.checked = true;
@@ -475,11 +473,14 @@
         const parts = [];
         if (dmpCount) parts.push(`DMP: ${dmpCount.toLocaleString("id-ID")} outlet`);
         if (d2Msg) parts.push(d2Msg);
-        parts.push("EDI tidak diupload — Dashboard 1 dilewati");
+        parts.push("EDI tidak dipilih — Validasi Kunjungan dilewati");
         setStatus(parts.join(" · "), "ok");
+        collapseUpload();
+        $("tab1").disabled = true;
         showDash(2);
         return;
       }
+      $("tab1").disabled = false;
 
       setStatus("Membaca EDI...");
       const ediAoa = await readWorkbook(state.ediFile);
@@ -539,18 +540,19 @@
       populateSalesmen(salesmen);
       applyFilters();
       $("resultSection").classList.remove("hidden");
-      const msg = [`Selesai · ${results.length.toLocaleString("id-ID")} baris`];
-      if (dmpCount) msg.push(`DMP: ${dmpCount.toLocaleString("id-ID")} outlet`);
+      const msg = [`${results.length.toLocaleString("id-ID")} kunjungan`];
+      if (dmpCount) msg.push(`${dmpCount.toLocaleString("id-ID")} outlet DMP`);
       if (d2Msg) msg.push(d2Msg);
       if (state.hhtFile) {
         const matched = results.filter((r) => r.hht).length;
-        const scanned = results.filter((r) => isScanned(r.hht)).length;
-        msg.push(`HHT match: ${matched.toLocaleString("id-ID")} · TP SCAN: ${scanned.toLocaleString("id-ID")}`);
+        msg.push(`${matched.toLocaleString("id-ID")} cocok HHT`);
       } else {
-        msg.push("HHT tidak diupload, kolom scan dianggap TDK");
+        msg.push("tanpa HHT — scan dianggap tidak ada");
       }
       if (hhtWarn) msg.push(hhtWarn);
       setStatus(msg.join(" · "), "ok");
+      collapseUpload();
+      showDash(1);
     } catch (err) {
       console.error(err);
       setStatus("Gagal: " + err.message, "err");
@@ -566,19 +568,17 @@
     for (const r of rows) counts[r.category]++;
     const total = rows.length;
 
-    const html = [
-      statCard("Total baris", total, "info"),
-      ...Object.keys(CATEGORY_INFO).map((k) => {
-        const info = CATEGORY_INFO[k];
-        const pct = total ? ((counts[k] / total) * 100).toFixed(1) : "0.0";
-        return statCard(info.label, `${counts[k]} <small style="font-size:12px;color:#6b7280;font-weight:400">(${pct}%)</small>`, info.tone);
-      }),
-    ].join("");
-    $("summary").innerHTML = html;
+    // 6 kartu kategori saja — totalnya sudah tampil di sebelah judul "Detail".
+    $("summary").innerHTML = Object.keys(CATEGORY_INFO).map((k) => {
+      const info = CATEGORY_INFO[k];
+      const pct = total ? ((counts[k] / total) * 100).toFixed(1) : "0.0";
+      return statCard(info.label, counts[k].toLocaleString("id-ID"), info.tone, `${pct}%`);
+    }).join("");
   }
 
-  function statCard(label, value, tone) {
-    return `<div class="stat ${tone || ""}"><b>${value}</b><span>${escapeHtml(label)}</span></div>`;
+  function statCard(label, value, tone, sub) {
+    const s = sub ? ` <small>${sub}</small>` : "";
+    return `<div class="stat ${tone || ""}"><b>${value}${s}</b><span>${escapeHtml(label)}</span></div>`;
   }
 
   function getSelectedCategories() {
@@ -647,25 +647,30 @@
       const rayon = dup ? "" : escapeHtml(r.rayonEff);
       const cycle = dup ? "" : escapeHtml(r.cycleEff);
       const consTag = dup ? "" : `<span class="tag-cons cons-${r.consistency}" title="${escapeHtml(cons.hint)}">${escapeHtml(consLabel)}</span>`;
+      const dist = r.distance !== null && r.distance !== undefined ? Number(r.distance).toFixed(1) : "";
       return `<tr class="${dup ? "row-dup" : ""}">
         <td><span class="tag tag-${r.category}">${escapeHtml(info.label)}</span></td>
-        <td>${consTag}</td>
-        <td>${nomor}</td>
+        <td class="col-x">${consTag}</td>
+        <td class="mono">${nomor}</td>
         <td>${nama}</td>
         <td>${sls}</td>
-        <td>${rayon}</td>
-        <td>${cycle}</td>
-        <td>${escapeHtml(r.visitDate || "")}</td>
-        <td>${escapeHtml(r.jamin || "")}</td>
-        <td>${escapeHtml(r.jamout || "")}</td>
-        <td>${escapeHtml(r.flagRadius || "BLANK")}</td>
-        <td>${escapeHtml(r.distance !== null && r.distance !== undefined ? String(r.distance) : "")}</td>
-        <td>${hhtCell}</td>
+        <td class="col-x mono">${rayon}</td>
+        <td class="col-x">${cycle}</td>
+        <td class="mono">${escapeHtml(r.visitDate || "")}</td>
+        <td class="col-x mono">${escapeHtml(r.jamin || "")}</td>
+        <td class="col-x mono">${escapeHtml(r.jamout || "")}</td>
+        <td class="mono">${escapeHtml(r.flagRadius || "BLANK")}</td>
+        <td class="col-x mono">${dist}</td>
+        <td class="mono">${hhtCell}</td>
         <td>${escapeHtml(alasanHht(r))}</td>
-        <td>${escapeHtml(r.alorReason || "")}</td>
+        <td class="col-x">${escapeHtml(r.alorReason || "")}</td>
         <td>${escapeHtml(info.suggest)}</td>
       </tr>`;
     }).join("");
+
+    if (!slice.length) {
+      tbody.innerHTML = `<tr><td colspan="16" class="empty">Tidak ada baris yang cocok dengan filter ini.</td></tr>`;
+    }
 
     $("countInfo").textContent = `${total.toLocaleString("id-ID")} baris`;
     $("pageInfo").textContent = `Halaman ${state.page} / ${pages}`;
@@ -807,25 +812,55 @@
   }
 
   // ---- Tab switching (Dashboard 1 / Dashboard 2) ----
-  const panels = {
-    1: ["dash1", "dash1b"],
-    2: ["dash2"],
-  };
   function showDash(n) {
-    for (const [k, ids] of Object.entries(panels)) {
-      const on = String(k) === String(n);
-      for (const id of ids) {
-        const el = $(id);
-        if (el) el.hidden = !on;
-      }
-    }
-    $("tab1").classList.toggle("active", String(n) === "1");
-    $("tab2").classList.toggle("active", String(n) === "2");
-    $("tab1").setAttribute("aria-selected", String(n) === "1");
-    $("tab2").setAttribute("aria-selected", String(n) === "2");
+    const one = String(n) === "1";
+    $("dash1").hidden = !one;
+    $("dash2").hidden = one;
+    $("tab1").classList.toggle("active", one);
+    $("tab2").classList.toggle("active", !one);
+    $("tab1").setAttribute("aria-selected", one);
+    $("tab2").setAttribute("aria-selected", !one);
   }
   $("tab1").addEventListener("click", () => showDash(1));
   $("tab2").addEventListener("click", () => showDash(2));
+
+  // "Detail lengkap" — tampilkan kolom sekunder.
+  $("toggleFullCols").addEventListener("change", (e) => {
+    document.body.classList.toggle("full-cols", e.target.checked);
+  });
+
+  // Tombol bantuan membuka blok penjelasan yang tersembunyi.
+  const openHelp = (btnId, detId) => {
+    const b = $(btnId), d = $(detId);
+    if (!b || !d) return;
+    b.addEventListener("click", () => {
+      d.open = !d.open;
+      if (d.open) d.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+  };
+  openHelp("helpD1Btn", "helpD1");
+  openHelp("helpD2Btn", "helpD2");
+
+  // Setelah diproses, panel upload mengkerut jadi strip ringkas.
+  $("changeFilesBtn").addEventListener("click", () => {
+    $("uploadCard").classList.remove("hidden");
+    $("loadedBar").classList.add("hidden");
+    $("uploadCard").scrollIntoView({ block: "start", behavior: "smooth" });
+  });
+
+  function collapseUpload() {
+    const picked = [
+      state.ediFile && "EDI",
+      state.hhtFile && "HHT",
+      state.dmpFile && "DMP",
+      state.lbpFile && "LBP",
+    ].filter(Boolean);
+    $("lbFiles").innerHTML = picked.map((p) => `<span>${p}</span>`).join("");
+    $("lbStatus").textContent = $("status").textContent;
+    $("uploadCard").classList.add("hidden");
+    $("loadedBar").classList.remove("hidden");
+    $("tabs").classList.remove("hidden");
+  }
 
   // ---- Shared surface for dash2.js ----
   // dash2 reuses the same universal file readers and the DMP outlet index.

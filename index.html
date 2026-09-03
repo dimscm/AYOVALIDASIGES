@@ -4,299 +4,263 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>M3 Beverage Mayora</title>
-  <link rel="stylesheet" href="styles.css?v=12" />
+  <link rel="stylesheet" href="styles.css?v=13" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23c8102e'/%3E%3Ctext x='50' y='62' font-size='34' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EM3%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
       <div class="logo">M3</div>
-      <div>
-        <h1>M3 &mdash; Beverage Mayora</h1>
-        <p class="sub">Validasi kunjungan &amp; coverage produk</p>
-      </div>
+      <h1>M3 &mdash; Beverage Mayora</h1>
     </div>
   </header>
 
-  <nav class="tabs" role="tablist">
-    <div class="tabs-inner">
-      <button class="tab active" id="tab1" role="tab" aria-selected="true" aria-controls="dash1">
-        <span class="tab-n">01</span> Flag Radius &amp; Scan
-      </button>
-      <button class="tab" id="tab2" role="tab" aria-selected="false" aria-controls="dash2">
-        <span class="tab-n">02</span> Outlet Aktif per Produk
-      </button>
-    </div>
-  </nav>
-
   <main>
-    <!-- ===== Dashboard 1 ===== -->
-    <div id="dash1" role="tabpanel">
-    <!-- Kriteria -->
-    <section class="card">
-      <h2>CARA CEK</h2>
-      <div class="criteria-grid">
-        <div class="crit crit-blank-scan">
-          <h3>FLAG BLANK, TP SCAN</h3>
-          <p>Belum ada validasi, barcode sudah ada.</p>
-          <p class="solusi"><b>SOLUSI:</b> Scan barcode = validasi</p>
-        </div>
-        <div class="crit crit-blank-noscan">
-          <h3>FLAG BLANK, TDK SCAN</h3>
-          <p>Toko tidak ada / tidak ketemu.</p>
-        </div>
-        <div class="crit crit-0-scan">
-          <h3>FLAG 0 (OUT RADIUS), TP SCAN</h3>
-          <p>Kunjungi tapi validasi salah, atau fiktif barcode.</p>
-        </div>
-        <div class="crit crit-0-noscan">
-          <h3>FLAG 0 (OUT RADIUS), TDK SCAN</h3>
-          <p>Kemungkinan besar tidak dikunjungi, atau kunjungan tapi validasi salah.</p>
-        </div>
-        <div class="crit crit-1-scan best">
-          <h3>FLAG 1 (IN RADIUS), TP SCAN</h3>
-          <p><b>INI PALING VALID</b></p>
-        </div>
-        <div class="crit crit-1-noscan">
-          <h3>FLAG 1 (IN RADIUS), TDK SCAN</h3>
-          <p>Kemungkinan tidak barcode.</p>
-        </div>
+
+    <!-- ============ STEP 1: UPLOAD ============ -->
+    <section class="card upload-card" id="uploadCard">
+      <div class="up-head">
+        <h2>Pilih file</h2>
+        <p class="up-hint">Data diproses di browser Anda. Tidak ada yang dikirim ke server.</p>
       </div>
 
-      <h3 class="sub-h">Konsistensi per outlet</h3>
-      <p class="sub-desc">Outlet yang dikunjungi lebih dari sekali dinilai konsistensinya berdasarkan Flag Radius seluruh kunjungan. Tag ini muncul di kolom <b>Konsistensi</b> tabel.</p>
-      <div class="criteria-grid">
-        <div class="crit crit-cons-valid">
-          <h3>Konsisten Valid</h3>
-          <p>Semua kunjungan outlet ini <b>Flag = 1 (IN RADIUS)</b>. Tidak ada aksi.</p>
-        </div>
-        <div class="crit crit-cons-problem">
-          <h3>Konsisten Bermasalah</h3>
-          <p>Semua kunjungan outlet ini <b>Flag = 0 (OUT RADIUS) atau BLANK</b>. Perlu revalidasi.</p>
-        </div>
-        <div class="crit crit-cons-mixed">
-          <h3>⚠ Inkonsisten</h3>
-          <p>Kadang <b>IN RADIUS</b>, kadang <b>OUT RADIUS / BLANK</b> di outlet yang sama. Sinyal: koordinat borderline / validasi salah / sales tidak konsisten. <b>Prioritas investigasi.</b></p>
-        </div>
-        <div class="crit crit-cons-single">
-          <h3>1 kunjungan</h3>
-          <p>Outlet baru dikunjungi sekali di periode ini — konsistensi belum bisa dinilai.</p>
-        </div>
-      </div>
-
-      <details class="steps">
-        <summary>Langkah kerja &amp; permintaan data</summary>
-        <ol>
-          <li>Masing-masing SS tarik EDI Flag Visit Radius di Matriks, minta sama SA.</li>
-          <li>Tambahkan Nama Toko, Alamat Toko, Rayon, Cycle, HHT.</li>
-          <li>SS filter Flag BLANK &amp; 0 → belum validasi dan out radius.</li>
-          <li>Cocokan LongLat Validasi, LongLat Last Visit, dan Alamat Toko.</li>
-          <li>Validasi salah &amp; last visit juga salah → validasi ulang. Kalau last visit benar → Atribut 4.</li>
-          <li>Validasi benar tapi last visit salah (sales tidak kunjungi, order by phone) → orderan by FPB KPL, jangan input SFA.</li>
-          <li>Permintaan data: LongLat Last Visit, LongLat Validasi, Kode Outlet, Nama Toko, Alamat Toko, Nama Salesman, Rayon, Cycle, HHT/Scan, Jam Masuk, Jam Keluar, Flag Radius, Alor Reason.</li>
-        </ol>
-      </details>
-    </section>
-    </div><!-- /dash1 head -->
-
-    <!-- Upload (shared) -->
-    <section class="card" id="uploadCard">
-      <h2>Upload File</h2>
-      <div class="uploads">
-        <label class="drop">
+      <div class="filelist">
+        <label class="frow" id="rowEdi">
           <input type="file" id="ediFile" accept=".xlsx,.xls,.txt,.csv,.7z,.zip,.gz" />
-          <div>
-            <b>EDI Flag Radius <span class="badge-d1">D1</span></b>
-            <p>Excel (<code>.xlsx</code>/<code>.xls</code>), teks pipe-delimited (<code>.txt</code>/<code>.csv</code>), atau archive-nya (<code>.7z</code>/<code>.zip</code>/<code>.gz</code>). Kolom: FLAG RADIUS, CUSTNO, dst.</p>
-            <p class="filename" id="ediName">Belum ada file</p>
-          </div>
+          <span class="fmark"></span>
+          <span class="fmain">
+            <b>EDI Flag Radius</b>
+            <i class="ftag">Validasi kunjungan</i>
+            <span class="fname" id="ediName">Belum dipilih</span>
+          </span>
+          <span class="fbtn">Pilih</span>
         </label>
 
-        <label class="drop">
+        <label class="frow" id="rowHht">
           <input type="file" id="hhtFile" accept=".xlsx,.xls,.txt,.csv,.7z,.zip,.gz" />
-          <div>
-            <b>HHT / Scan <span class="badge-d1">D1</span></b>
-            <p>Monitoring HHT untuk cek TP SCAN / TDK SCAN + alasan tidak scan.</p>
-            <p class="filename" id="hhtName">Belum ada file</p>
-          </div>
+          <span class="fmark"></span>
+          <span class="fmain">
+            <b>HHT / Scan</b>
+            <i class="ftag">Validasi kunjungan</i>
+            <span class="fname" id="hhtName">Belum dipilih</span>
+          </span>
+          <span class="fbtn">Pilih</span>
         </label>
 
-        <label class="drop">
+        <label class="frow" id="rowDmp">
           <input type="file" id="dmpFile" accept=".txt,.csv,.xlsx,.xls,.zip,.gz,.7z" />
-          <div>
-            <b>Master Data DMP <span class="badge-both">D1+D2</span></b>
-            <p>Master outlet: Kode Outlet, Nama Outlet, Salesman, Rayon, Alamat. Teks / Excel / archive.</p>
-            <p class="filename" id="dmpName">Belum ada file</p>
-          </div>
+          <span class="fmark"></span>
+          <span class="fmain">
+            <b>Master Data DMP</b>
+            <i class="ftag both">Keduanya</i>
+            <span class="fname" id="dmpName">Belum dipilih</span>
+          </span>
+          <span class="fbtn">Pilih</span>
         </label>
 
-        <label class="drop">
+        <label class="frow" id="rowLbp">
           <input type="file" id="lbpFile" accept=".txt,.csv,.xlsx,.xls,.zip,.gz,.7z" />
-          <div>
-            <b>LBP (Laporan Penjualan) <span class="badge-d2">D2</span></b>
-            <p>Laporan hasil penjualan per faktur. Kolom isi &amp; karton dihitung otomatis dari Kemasan &amp; QTYPCS.</p>
-            <p class="filename" id="lbpName">Belum ada file</p>
-          </div>
+          <span class="fmark"></span>
+          <span class="fmain">
+            <b>LBP &mdash; Laporan Penjualan</b>
+            <i class="ftag two">Coverage produk</i>
+            <span class="fname" id="lbpName">Belum dipilih</span>
+          </span>
+          <span class="fbtn">Pilih</span>
         </label>
       </div>
 
       <div class="actions">
-        <button id="processBtn" disabled>Proses</button>
+        <button id="processBtn" class="big" disabled>Proses</button>
         <button id="resetBtn" class="ghost">Reset</button>
         <span id="status" class="status"></span>
       </div>
     </section>
 
-    <div id="dash1b" role="tabpanel">
-    <!-- Hasil -->
-    <section class="card hidden" id="resultSection">
-      <h2>Ringkasan</h2>
-      <div class="summary" id="summary"></div>
+    <!-- Compact strip shown after processing -->
+    <div class="loaded-bar hidden" id="loadedBar">
+      <span class="lb-files" id="lbFiles"></span>
+      <span class="lb-status" id="lbStatus"></span>
+      <button class="ghost sm" id="changeFilesBtn">Ganti file</button>
+    </div>
 
-      <h2 style="margin-top: 24px;">Detail</h2>
-      <div class="toolbar">
-        <input type="search" id="search" placeholder="Cari nama toko, salesman, kode outlet, rayon..." />
-        <div class="multi" id="filterCategory">
-          <button type="button" class="multi-btn" id="filterCategoryBtn">
-            <span id="filterCategoryLabel">Semua kategori</span>
-            <span class="chev">▾</span>
-          </button>
-          <div class="multi-menu" id="filterCategoryMenu" hidden>
-            <label class="multi-opt all" title="Klik untuk reset — kembali ke semua kategori"><input type="checkbox" id="filterCategoryAll" checked /> ↺ Semua kategori (reset)</label>
-            <div class="multi-sep"></div>
-            <label class="multi-opt"><input type="checkbox" value="1-SCAN" class="filterCategoryItem" /> FLAG 1 (IN RADIUS), TP SCAN</label>
-            <label class="multi-opt"><input type="checkbox" value="1-NOSCAN" class="filterCategoryItem" /> FLAG 1 (IN RADIUS), TDK SCAN</label>
-            <label class="multi-opt"><input type="checkbox" value="0-SCAN" class="filterCategoryItem" /> FLAG 0 (OUT RADIUS), TP SCAN</label>
-            <label class="multi-opt"><input type="checkbox" value="0-NOSCAN" class="filterCategoryItem" /> FLAG 0 (OUT RADIUS), TDK SCAN</label>
-            <label class="multi-opt"><input type="checkbox" value="BLANK-SCAN" class="filterCategoryItem" /> FLAG BLANK, TP SCAN</label>
-            <label class="multi-opt"><input type="checkbox" value="BLANK-NOSCAN" class="filterCategoryItem" /> FLAG BLANK, TDK SCAN</label>
-          </div>
-        </div>
-        <div class="multi" id="filterSalesman">
-          <button type="button" class="multi-btn" id="filterSalesmanBtn">
-            <span id="filterSalesmanLabel">Semua salesman</span>
-            <span class="chev">▾</span>
-          </button>
-          <div class="multi-menu wide" id="filterSalesmanMenu" hidden>
-            <input type="search" id="filterSalesmanSearch" class="multi-search" placeholder="Cari salesman..." />
-            <label class="multi-opt all" title="Klik untuk reset — kembali ke semua salesman"><input type="checkbox" id="filterSalesmanAll" checked /> ↺ Semua salesman (reset)</label>
-            <div class="multi-sep"></div>
-            <div id="filterSalesmanList"></div>
-          </div>
-        </div>
-        <label class="check-toggle" title="Hanya tampilkan outlet yang punya kunjungan dengan flag radius berbeda (kadang IN, kadang OUT/BLANK)">
-          <input type="checkbox" id="filterInkonsisten" />
-          <span>Hanya outlet inkonsisten</span>
-        </label>
-        <button id="exportBtn" class="ghost">Export Excel</button>
-        <span id="countInfo" class="count"></span>
+    <!-- ============ STEP 2: HASIL ============ -->
+    <nav class="tabs hidden" id="tabs" role="tablist">
+      <div class="tabs-inner">
+        <button class="tab active" id="tab1" role="tab" aria-selected="true">Validasi Kunjungan</button>
+        <button class="tab" id="tab2" role="tab" aria-selected="false">Coverage Produk</button>
       </div>
+    </nav>
 
-      <div class="table-wrap">
-        <table id="resultTable">
-          <thead>
-            <tr>
-              <th>Kategori</th>
-              <th>Konsistensi</th>
-              <th>Kode Outlet</th>
-              <th>Nama Toko</th>
-              <th>Salesman</th>
-              <th>Rayon (Team)</th>
-              <th>Cycle</th>
-              <th>Visit Date</th>
-              <th>Jam Masuk</th>
-              <th>Jam Keluar</th>
-              <th>Flag Radius</th>
-              <th>Distance</th>
-              <th>HHT / Tipe Scan</th>
-              <th>Alasan HHT</th>
-              <th>Alor Reason</th>
-              <th>Saran</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <div class="pager">
-        <button id="prevPage" class="ghost">&larr; Prev</button>
-        <span id="pageInfo"></span>
-        <button id="nextPage" class="ghost">Next &rarr;</button>
-      </div>
-    </section>
-    </div><!-- /dash1b -->
+    <!-- ===== Dashboard 1 ===== -->
+    <div id="dash1" role="tabpanel">
+      <section class="card hidden" id="resultSection">
+        <div class="sec-head">
+          <h2>Ringkasan</h2>
+          <button class="linkbtn" id="helpD1Btn">Arti kategori</button>
+        </div>
+        <div class="summary" id="summary"></div>
+
+        <details class="help" id="helpD1">
+          <summary>Arti kategori &amp; konsistensi</summary>
+          <div class="help-body">
+            <div class="hgrid">
+              <div class="h-item ok"><b>Flag 1 + Scan</b><span>Paling valid. Tidak ada aksi.</span></div>
+              <div class="h-item info"><b>Flag 1 + Tidak scan</b><span>Kemungkinan barcode belum ada di toko.</span></div>
+              <div class="h-item warn"><b>Flag 0 + Scan</b><span>Dikunjungi tapi titik validasi salah, atau fiktif barcode.</span></div>
+              <div class="h-item warn"><b>Flag 0 + Tidak scan</b><span>Kemungkinan tidak dikunjungi, atau validasi salah.</span></div>
+              <div class="h-item info"><b>Blank + Scan</b><span>Barcode sudah discan tapi belum tervalidasi. Solusi: scan = validasi.</span></div>
+              <div class="h-item bad"><b>Blank + Tidak scan</b><span>Toko tidak ada / tidak ketemu.</span></div>
+            </div>
+            <p class="hnote"><b>Konsistensi</b> membandingkan semua kunjungan di outlet yang sama:
+              <span class="tag-cons cons-VALID">Konsisten Valid</span> semua kunjungan IN RADIUS &middot;
+              <span class="tag-cons cons-PROBLEM">Konsisten Bermasalah</span> semua OUT RADIUS/BLANK &middot;
+              <span class="tag-cons cons-MIXED">⚠ Inkonsisten</span> kadang IN kadang OUT — prioritas investigasi.
+            </p>
+          </div>
+        </details>
+
+        <div class="sec-head mt">
+          <h2>Detail</h2>
+          <span id="countInfo" class="count"></span>
+        </div>
+
+        <div class="toolbar">
+          <input type="search" id="search" placeholder="Cari toko, salesman, kode outlet..." />
+          <div class="multi" id="filterCategory">
+            <button type="button" class="multi-btn" id="filterCategoryBtn">
+              <span id="filterCategoryLabel">Semua kategori</span><span class="chev">▾</span>
+            </button>
+            <div class="multi-menu" id="filterCategoryMenu" hidden>
+              <label class="multi-opt all"><input type="checkbox" id="filterCategoryAll" checked /> ↺ Semua kategori</label>
+              <div class="multi-sep"></div>
+              <label class="multi-opt"><input type="checkbox" value="1-SCAN" class="filterCategoryItem" /> Flag 1 + Scan</label>
+              <label class="multi-opt"><input type="checkbox" value="1-NOSCAN" class="filterCategoryItem" /> Flag 1 + Tidak scan</label>
+              <label class="multi-opt"><input type="checkbox" value="0-SCAN" class="filterCategoryItem" /> Flag 0 + Scan</label>
+              <label class="multi-opt"><input type="checkbox" value="0-NOSCAN" class="filterCategoryItem" /> Flag 0 + Tidak scan</label>
+              <label class="multi-opt"><input type="checkbox" value="BLANK-SCAN" class="filterCategoryItem" /> Blank + Scan</label>
+              <label class="multi-opt"><input type="checkbox" value="BLANK-NOSCAN" class="filterCategoryItem" /> Blank + Tidak scan</label>
+            </div>
+          </div>
+          <div class="multi" id="filterSalesman">
+            <button type="button" class="multi-btn" id="filterSalesmanBtn">
+              <span id="filterSalesmanLabel">Semua salesman</span><span class="chev">▾</span>
+            </button>
+            <div class="multi-menu wide" id="filterSalesmanMenu" hidden>
+              <input type="search" id="filterSalesmanSearch" class="multi-search" placeholder="Cari salesman..." />
+              <label class="multi-opt all"><input type="checkbox" id="filterSalesmanAll" checked /> ↺ Semua salesman</label>
+              <div class="multi-sep"></div>
+              <div id="filterSalesmanList"></div>
+            </div>
+          </div>
+          <label class="check-toggle">
+            <input type="checkbox" id="filterInkonsisten" />
+            <span>Hanya inkonsisten</span>
+          </label>
+          <label class="check-toggle">
+            <input type="checkbox" id="toggleFullCols" />
+            <span>Detail lengkap</span>
+          </label>
+          <button id="exportBtn" class="ghost">Export Excel</button>
+        </div>
+
+        <div class="table-wrap">
+          <table id="resultTable">
+            <thead>
+              <tr>
+                <th>Kategori</th>
+                <th class="col-x">Konsistensi</th>
+                <th>Kode Outlet</th>
+                <th>Nama Toko</th>
+                <th>Salesman</th>
+                <th class="col-x">Rayon</th>
+                <th class="col-x">Cycle</th>
+                <th>Tanggal</th>
+                <th class="col-x">Jam Masuk</th>
+                <th class="col-x">Jam Keluar</th>
+                <th>Flag</th>
+                <th class="col-x">Distance</th>
+                <th>Scan</th>
+                <th>Alasan Tidak Scan</th>
+                <th class="col-x">Alor Reason</th>
+                <th>Saran</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="pager">
+          <button id="prevPage" class="ghost">&larr;</button>
+          <span id="pageInfo"></span>
+          <button id="nextPage" class="ghost">&rarr;</button>
+        </div>
+      </section>
+    </div>
 
     <!-- ===== Dashboard 2 ===== -->
     <div id="dash2" role="tabpanel" hidden>
-      <section class="card">
-        <h2>Cara Baca Dashboard 2</h2>
-        <p class="sub-desc">Gabungkan <b>Master Data DMP</b> (identitas outlet) dengan <b>LBP</b> (transaksi penjualan) untuk lihat outlet mana yang <b>sudah</b> dan <b>belum</b> transaksi di tiap produk.</p>
-        <div class="criteria-grid">
-          <div class="crit crit-d2-isi">
-            <h3>Kolom <code>isi</code></h3>
-            <p>Diambil dari <b>Kemasan mulai karakter ke-5</b>. Contoh <code>CAR/24 ,BOT/1 ,BOT</code> → isi = <b>24</b>.</p>
-          </div>
-          <div class="crit crit-d2-karton">
-            <h3>Kolom <code>karton</code></h3>
-            <p><code>QTYPCS ÷ isi</code>. Contoh 6.000 pcs ÷ 12 = <b>500 karton</b>.</p>
-          </div>
-          <div class="crit crit-d2-group">
-            <h3>Grup Produk</h3>
-            <p>Kode barang yang produknya sama digabung. Contoh <b>Le Minerale 600ML</b> punya 4 kode (Reguler, Pesta Bola, Promo Gosok) → jadi 1 grup.</p>
-          </div>
-          <div class="crit crit-d2-gap">
-            <h3>Belum Transaksi</h3>
-            <p>Outlet yang <b>ada di LBP</b> (aktif beli produk lain) tapi <b>tidak pernah</b> beli produk yang dipilih. Ini target penetrasi.</p>
-          </div>
-        </div>
-      </section>
-
       <section class="card hidden" id="d2ResultSection">
-        <h2>Ringkasan Penjualan</h2>
+        <div class="sec-head">
+          <h2>Ringkasan</h2>
+          <button class="linkbtn" id="helpD2Btn">Cara hitung</button>
+        </div>
         <div class="summary" id="d2Summary"></div>
 
-        <h2 style="margin-top: 24px;">Coverage per Produk</h2>
+        <details class="help" id="helpD2">
+          <summary>Cara hitung</summary>
+          <div class="help-body">
+            <div class="hgrid">
+              <div class="h-item info"><b>isi</b><span>Angka mulai karakter ke-5 dari Kemasan. <code>CAR/24 ,BOT/1 ,BOT</code> → 24.</span></div>
+              <div class="h-item info"><b>karton</b><span><code>QTYPCS ÷ isi</code>. 6.000 pcs ÷ 12 = 500 karton.</span></div>
+              <div class="h-item warn"><b>Grup produk</b><span>Kode barang dengan produk sama digabung. Le Minerale 600ML = 4 kode jadi 1.</span></div>
+              <div class="h-item bad"><b>Belum transaksi</b><span>Outlet aktif beli produk lain, tapi belum pernah beli produk yang dipilih.</span></div>
+            </div>
+          </div>
+        </details>
+
+        <div class="sec-head mt">
+          <h2>Coverage per Produk</h2>
+          <span id="d2CoverageCount" class="count"></span>
+        </div>
         <div class="toolbar">
           <div class="multi" id="d2FilterSalesman">
             <button type="button" class="multi-btn" id="d2FilterSalesmanBtn">
-              <span id="d2FilterSalesmanLabel">Semua salesman</span>
-              <span class="chev">▾</span>
+              <span id="d2FilterSalesmanLabel">Semua salesman</span><span class="chev">▾</span>
             </button>
             <div class="multi-menu wide" id="d2FilterSalesmanMenu" hidden>
               <input type="search" id="d2FilterSalesmanSearch" class="multi-search" placeholder="Cari salesman..." />
-              <label class="multi-opt all" title="Klik untuk reset"><input type="checkbox" id="d2FilterSalesmanAll" checked /> ↺ Semua salesman (reset)</label>
+              <label class="multi-opt all"><input type="checkbox" id="d2FilterSalesmanAll" checked /> ↺ Semua salesman</label>
               <div class="multi-sep"></div>
               <div id="d2FilterSalesmanList"></div>
             </div>
           </div>
           <div class="multi" id="d2FilterPeriode">
             <button type="button" class="multi-btn" id="d2FilterPeriodeBtn">
-              <span id="d2FilterPeriodeLabel">Semua periode</span>
-              <span class="chev">▾</span>
+              <span id="d2FilterPeriodeLabel">Semua periode</span><span class="chev">▾</span>
             </button>
             <div class="multi-menu" id="d2FilterPeriodeMenu" hidden>
-              <label class="multi-opt all" title="Klik untuk reset"><input type="checkbox" id="d2FilterPeriodeAll" checked /> ↺ Semua periode (reset)</label>
+              <label class="multi-opt all"><input type="checkbox" id="d2FilterPeriodeAll" checked /> ↺ Semua periode</label>
               <div class="multi-sep"></div>
               <div id="d2FilterPeriodeList"></div>
             </div>
           </div>
-          <label class="check-toggle" title="Hitung retur (TRANSTYPE R) sebagai transaksi">
+          <label class="check-toggle">
             <input type="checkbox" id="d2InclRetur" />
             <span>Ikutkan retur</span>
           </label>
-          <button id="d2ExportCoverage" class="ghost">Export Coverage</button>
-          <span id="d2CoverageCount" class="count"></span>
+          <button id="d2ExportCoverage" class="ghost">Export Excel</button>
         </div>
         <div class="table-wrap">
           <table id="d2CoverageTable">
             <thead>
               <tr>
                 <th>Grup Produk</th>
-                <th>Kode Barang</th>
-                <th>Outlet Beli</th>
+                <th>Kode</th>
+                <th>Sudah Beli</th>
                 <th>Belum Beli</th>
                 <th>Coverage</th>
-                <th>Total Karton</th>
-                <th>Total Pcs</th>
+                <th>Karton</th>
+                <th>Pcs</th>
                 <th>Nilai (Rp)</th>
               </tr>
             </thead>
@@ -304,29 +268,29 @@
           </table>
         </div>
 
-        <h2 style="margin-top: 28px;">Outlet Belum Transaksi</h2>
-        <p class="sub-desc">Pilih satu atau beberapa produk, lalu lihat daftar outlet yang belum pernah beli produk tersebut.</p>
+        <div class="sec-head mt">
+          <h2>Outlet Belum Transaksi</h2>
+          <span id="d2GapCount" class="count"></span>
+        </div>
         <div class="toolbar">
-          <input type="search" id="d2Search" placeholder="Cari nama outlet, kode outlet, salesman, rayon..." />
+          <input type="search" id="d2Search" placeholder="Cari outlet, salesman, rayon..." />
           <div class="multi" id="d2FilterProduk">
             <button type="button" class="multi-btn" id="d2FilterProdukBtn">
-              <span id="d2FilterProdukLabel">Pilih produk...</span>
-              <span class="chev">▾</span>
+              <span id="d2FilterProdukLabel">Semua produk</span><span class="chev">▾</span>
             </button>
             <div class="multi-menu wide" id="d2FilterProdukMenu" hidden>
               <input type="search" id="d2FilterProdukSearch" class="multi-search" placeholder="Cari produk..." />
-              <label class="multi-opt all" title="Klik untuk reset"><input type="checkbox" id="d2FilterProdukAll" checked /> ↺ Semua produk (reset)</label>
+              <label class="multi-opt all"><input type="checkbox" id="d2FilterProdukAll" checked /> ↺ Semua produk</label>
               <div class="multi-sep"></div>
               <div id="d2FilterProdukList"></div>
             </div>
           </div>
           <select id="d2GapMode">
-            <option value="ANY">Belum beli SALAH SATU produk terpilih</option>
-            <option value="ALL">Belum beli SEMUA produk terpilih</option>
-            <option value="BOUGHT">Sudah beli (kebalikan)</option>
+            <option value="ANY">Belum beli salah satu</option>
+            <option value="ALL">Belum beli semuanya</option>
+            <option value="BOUGHT">Sudah beli</option>
           </select>
           <button id="d2ExportGap" class="ghost">Export Excel</button>
-          <span id="d2GapCount" class="count"></span>
         </div>
         <div class="table-wrap">
           <table id="d2GapTable">
@@ -337,30 +301,29 @@
                 <th>Salesman</th>
                 <th>Rayon</th>
                 <th>Produk Belum Dibeli</th>
-                <th>Jumlah Grup Dibeli</th>
-                <th>Total Karton</th>
-                <th>Total Nilai (Rp)</th>
+                <th>Grup Dibeli</th>
+                <th>Karton</th>
+                <th>Nilai (Rp)</th>
               </tr>
             </thead>
             <tbody></tbody>
           </table>
         </div>
         <div class="pager">
-          <button id="d2PrevPage" class="ghost">&larr; Prev</button>
+          <button id="d2PrevPage" class="ghost">&larr;</button>
           <span id="d2PageInfo"></span>
-          <button id="d2NextPage" class="ghost">Next &rarr;</button>
+          <button id="d2NextPage" class="ghost">&rarr;</button>
         </div>
       </section>
-    </div><!-- /dash2 -->
+    </div>
 
-    <p class="foot">Semua pemrosesan berjalan lokal di browser Anda — file tidak diunggah ke server. <span class="ver">v12</span></p>
-    <p class="credit">dimscm</p>
+    <p class="credit">dimscm &middot; v13</p>
   </main>
 
   <script src="vendor/xlsx.full.min.js"></script>
   <script src="vendor/jszip.min.js"></script>
   <script src="vendor/7zz.umd.js"></script>
-  <script src="app.js?v=12"></script>
-  <script src="dash2.js?v=12"></script>
+  <script src="app.js?v=13"></script>
+  <script src="dash2.js?v=13"></script>
 </body>
 </html>
