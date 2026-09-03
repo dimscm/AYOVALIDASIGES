@@ -254,13 +254,41 @@
     return rows;
   }
 
-  // Extract compressed archive → { bytes, name } of a data file inside.
-  // Handles .7z (7z-wasm), .zip (JSZip), .gz (native).
-  async function extractCompressed(file) {
-    const nm = (file.name || "").toLowerCase();
-    if (nm.endsWith(".7z")) {
-      if (typeof SevenZip === "undefined") throw new Error("7z-wasm belum termuat.");
-      setStatus("Extract 7z...");
+  // ---- Deteksi format dari ISI file, bukan dari nama ----
+  // Penting untuk HP: Google Drive / file manager Android sering mengembalikan
+  // nama tanpa ekstensi ("dmp", "lbp"), jadi menebak dari nama tidak bisa diandalkan.
+  const SIG = {
+    "7z":  [0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C],
+    gz:    [0x1F, 0x8B],
+    ole2:  [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1], // .xls lama
+    zip:   [0x50, 0x4B],                                     // .zip dan .xlsx
+  };
+
+  async function sniff(src) {
+    const head = src instanceof Uint8Array
+      ? src.subarray(0, 8)
+      : new Uint8Array(await src.slice(0, 8).arrayBuffer());
+    const is = (sig) => sig.every((b, i) => head[i] === b);
+    if (is(SIG["7z"])) return "7z";
+    if (is(SIG.gz)) return "gz";
+    if (is(SIG.ole2)) return "xls";
+    if (is(SIG.zip)) return "zip";   // bisa .xlsx atau archive biasa
+    return "text";
+  }
+
+  const bytesOf = async (src) =>
+    src instanceof Uint8Array ? src : new Uint8Array(await src.arrayBuffer());
+
+  // ZIP bisa berupa .xlsx (punya [Content_Types].xml) atau archive biasa.
+  async function zipIsXlsx(zip) {
+    return !!(zip.file("[Content_Types].xml") || zip.file("xl/workbook.xml"));
+  }
+
+  // Extract archive → { bytes, name } file data terbesar di dalamnya.
+  async function extractCompressed(src, kind) {
+    if (kind === "7z") {
+      if (typeof SevenZip === "undefined") throw new Error("Modul 7z gagal dimuat.");
+      setStatus("Membuka arsip 7z...");
       const sz = await SevenZip({
         locateFile: (p) => p.endsWith(".wasm") ? "vendor/7zz.wasm" : p,
         print: () => {}, printErr: () => {},
@@ -268,57 +296,58 @@
       const workDir = "/work";
       try { sz.FS.mkdir(workDir); } catch {}
       sz.FS.chdir(workDir);
-      sz.FS.writeFile("archive.7z", new Uint8Array(await file.arrayBuffer()));
+      sz.FS.writeFile("archive.7z", await bytesOf(src));
       const rc = sz.callMain(["e", "-y", "archive.7z"]);
-      if (rc !== 0) throw new Error("Gagal extract .7z");
+      if (rc !== 0) throw new Error("Gagal membuka arsip 7z (mungkin rusak atau berpassword).");
       const entries = sz.FS.readdir(workDir).filter((f) => f !== "." && f !== ".." && f !== "archive.7z");
-      // Pilih file data terbesar (xlsx/xls/txt/csv/tsv).
       let best = null, bestSize = -1;
       for (const f of entries) {
-        const lf = f.toLowerCase();
-        if (!/\.(xlsx|xls|txt|csv|tsv)$/i.test(lf)) continue;
-        const stat = sz.FS.stat(workDir + "/" + f);
-        if (stat.size > bestSize) { best = f; bestSize = stat.size; }
+        const st = sz.FS.stat(workDir + "/" + f);
+        if (st.size > bestSize) { best = f; bestSize = st.size; }
       }
-      if (!best) throw new Error(".7z tidak berisi file data (.xlsx/.xls/.txt/.csv/.tsv).");
+      if (!best) throw new Error("Arsip 7z kosong.");
       return { bytes: sz.FS.readFile(workDir + "/" + best), name: best };
     }
-    if (nm.endsWith(".zip")) {
-      if (typeof JSZip === "undefined") throw new Error("JSZip belum termuat.");
-      const zip = await JSZip.loadAsync(await file.arrayBuffer());
-      const candidates = [];
+    if (kind === "zip") {
+      if (typeof JSZip === "undefined") throw new Error("Modul ZIP gagal dimuat.");
+      const zip = await JSZip.loadAsync(await bytesOf(src));
+      const cands = [];
       zip.forEach((path, entry) => {
         if (entry.dir) return;
-        if (/\.(xlsx|xls|txt|csv|tsv)$/i.test(path)) {
-          candidates.push({ path, entry, size: entry._data ? entry._data.uncompressedSize : 0 });
-        }
+        if (/(^|\/)[._]/.test(path)) return;              // lewati __MACOSX, .DS_Store
+        cands.push({ path, entry, size: entry._data ? entry._data.uncompressedSize : 0 });
       });
-      if (!candidates.length) throw new Error("ZIP tidak berisi file data (.xlsx/.xls/.txt/.csv/.tsv).");
-      candidates.sort((a, b) => b.size - a.size);
-      return { bytes: await candidates[0].entry.async("uint8array"), name: candidates[0].path };
+      if (!cands.length) throw new Error("Arsip ZIP kosong.");
+      cands.sort((a, b) => b.size - a.size);
+      return { bytes: await cands[0].entry.async("uint8array"), name: cands[0].path };
     }
-    if (nm.endsWith(".gz")) {
-      if (typeof DecompressionStream === "undefined") throw new Error("Browser tidak mendukung DecompressionStream.");
+    if (kind === "gz") {
+      if (typeof DecompressionStream === "undefined") throw new Error("Browser tidak mendukung gzip.");
+      const bytes = await bytesOf(src);
       const ds = new DecompressionStream("gzip");
-      const stream = file.stream().pipeThrough(ds);
-      const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
-      return { bytes, name: file.name.replace(/\.gz$/i, "") };
+      const stream = new Blob([bytes]).stream().pipeThrough(ds);
+      return { bytes: new Uint8Array(await new Response(stream).arrayBuffer()), name: "data" };
     }
-    throw new Error("Format archive tidak dikenali: " + file.name);
+    throw new Error("Format arsip tidak dikenali.");
   }
 
   // Untuk file teks besar (mis. LBP 400rb+ baris): kembalikan raw text supaya
   // pemanggil bisa iterasi per baris tanpa materialisasi AoA penuh di memori.
-  // Return null kalau sumbernya Excel (harus lewat readAsAoA).
-  async function readRawText(file) {
-    const nm = (file.name || "").toLowerCase();
-    if (nm.endsWith(".7z") || nm.endsWith(".zip") || nm.endsWith(".gz")) {
-      const { bytes, name } = await extractCompressed(file);
-      if (/\.(txt|csv|tsv)$/i.test(name)) return new TextDecoder("utf-8").decode(bytes);
-      return null;
+  // Return null kalau isinya Excel (harus lewat readAsAoA).
+  async function readRawText(src) {
+    let kind = await sniff(src);
+    if (kind === "zip") {
+      const zip = await JSZip.loadAsync(await bytesOf(src));
+      if (await zipIsXlsx(zip)) return null;
     }
-    if (nm.endsWith(".txt") || nm.endsWith(".csv") || nm.endsWith(".tsv")) return await file.text();
-    return null;
+    if (kind === "7z" || kind === "gz" || kind === "zip") {
+      const { bytes } = await extractCompressed(src, kind);
+      return (await sniff(bytes)) === "text" ? new TextDecoder("utf-8").decode(bytes) : null;
+    }
+    if (kind === "xls") return null;
+    return typeof src.text === "function"
+      ? await src.text()
+      : new TextDecoder("utf-8").decode(src);
   }
 
   // Deteksi delimiter dari baris header.
@@ -331,19 +360,30 @@
   }
 
   // Universal reader: return array-of-arrays (AoA) dari sumber apa pun.
-  // Excel, teks pipe/tab/csv, atau salah satunya di dalam archive.
-  async function readAsAoA(file) {
-    const nm = (file.name || "").toLowerCase();
-    if (nm.endsWith(".7z") || nm.endsWith(".zip") || nm.endsWith(".gz")) {
-      const { bytes, name } = await extractCompressed(file);
-      const inner = new File([bytes], name);
-      return await readAsAoA(inner);
+  // Format ditentukan dari isi file, bukan nama, supaya tetap jalan di HP.
+  async function readAsAoA(src, depth = 0) {
+    if (depth > 3) throw new Error("Arsip bersarang terlalu dalam.");
+    const kind = await sniff(src);
+
+    if (kind === "zip") {
+      const zip = await JSZip.loadAsync(await bytesOf(src));
+      if (await zipIsXlsx(zip)) return excelToAoA(await bytesOf(src));
+      const { bytes } = await extractCompressed(src, "zip");
+      return await readAsAoA(bytes, depth + 1);
     }
-    if (nm.endsWith(".txt") || nm.endsWith(".csv") || nm.endsWith(".tsv")) {
-      return parseDelimitedText(await file.text());
+    if (kind === "7z" || kind === "gz") {
+      const { bytes } = await extractCompressed(src, kind);
+      return await readAsAoA(bytes, depth + 1);
     }
-    // Default: Excel.
-    const buf = new Uint8Array(await file.arrayBuffer());
+    if (kind === "xls") return excelToAoA(await bytesOf(src));
+
+    const text = typeof src.text === "function"
+      ? await src.text()
+      : new TextDecoder("utf-8").decode(src);
+    return parseDelimitedText(text);
+  }
+
+  function excelToAoA(buf) {
     const wb = XLSX.read(buf, { type: "array", cellDates: true });
     for (const n of wb.SheetNames) {
       const ws = wb.Sheets[n];
@@ -364,13 +404,9 @@
     const iNO = cols.indexOf("NAMAOUTLET");
     if (iKO < 0 || iNO < 0) throw new Error("Header DMP tidak dikenali (butuh KODEOUTLET, NAMAOUTLET).");
     const iAlamat = cols.indexOf("ALAMAT");
-    const iSlsno = cols.indexOf("SLSNO");
     const iSls = cols.indexOf("SALESMAN");
     const iRayon = cols.indexOf("RAYON");
-    const iSf = cols.indexOf("KODESALESFORCE");
-    const iSfName = cols.indexOf("NAMASALESFORCE");
     const iCycle = cols.indexOf("CYCLE");
-    const iBranch = cols.indexOf("KODEBRANCH");
     const cell = (row, i) => i >= 0 && row[i] != null ? String(row[i]).trim() : "";
     const idx = new Map();
     let count = 0;
@@ -378,16 +414,14 @@
       const row = rows[r] || [];
       const ko = cell(row, iKO);
       if (!ko || idx.has(ko)) continue;
+      // Hanya simpan kolom yang benar-benar dipakai — DMP bisa 150rb baris,
+      // menyimpan kolom yang tidak terpakai memboroskan memori (berat di HP).
       idx.set(ko, {
         namaOutlet: cell(row, iNO),
         alamat: cell(row, iAlamat),
-        slsno: cell(row, iSlsno),
         salesman: cell(row, iSls),
         rayon: cell(row, iRayon),
-        salesforce: cell(row, iSf),
-        salesforceName: cell(row, iSfName),
         cycle: cell(row, iCycle),
-        branch: cell(row, iBranch),
       });
       count++;
     }
@@ -401,6 +435,31 @@
     const el = $("status");
     el.textContent = msg || "";
     el.className = "status " + cls;
+    if (cls !== "err") clearError();
+  }
+
+  function clearError() {
+    const b = $("errBox");
+    if (b) { b.classList.add("hidden"); b.innerHTML = ""; }
+  }
+
+  // Tampilkan error di halaman, bukan cuma di console — di HP console tak terjangkau.
+  function showError(err) {
+    const b = $("errBox");
+    if (!b) return;
+    const msg = String((err && err.message) || err);
+    let hint = "";
+    if (/memor|allocat|Array buffer|out of/i.test(msg)) {
+      hint = "File terlalu besar untuk memori HP. Coba buka di laptop, atau proses satu file dulu (LBP saja, lalu EDI saja).";
+    } else if (/Header .* tidak dikenali/i.test(msg)) {
+      hint = "Kolom di file tidak sesuai. Pastikan file tidak tertukar antar slot.";
+    } else if (/kosong|rusak|arsip/i.test(msg)) {
+      hint = "Kalau file diambil dari Google Drive, download dulu ke HP, baru pilih dari Files/Downloads.";
+    } else {
+      hint = "Kalau file dari Google Drive, download dulu ke HP lalu pilih dari Files. File yang belum terunduh sering gagal dibaca.";
+    }
+    b.innerHTML = `<b>Gagal memproses</b>${escapeHtml(msg)}<span class="hint">${escapeHtml(hint)}</span>`;
+    b.classList.remove("hidden");
   }
 
   function toggleProcess() {
@@ -409,12 +468,29 @@
   }
 
   // Satu handler untuk keempat slot file: simpan, tandai baris, update tombol.
+  const fmtSize = (b) =>
+    b >= 1048576 ? (b / 1048576).toFixed(1).replace(".", ",") + " MB"
+                 : Math.max(1, Math.round(b / 1024)) + " KB";
+
   function wireFile(inputId, stateKey, nameId, rowId) {
     $(inputId).addEventListener("change", (e) => {
       const f = e.target.files[0];
       state[stateKey] = f;
-      $(nameId).textContent = f ? f.name : "Belum dipilih";
-      $(rowId).classList.toggle("has", !!f);
+      const row = $(rowId);
+      if (!f) {
+        $(nameId).textContent = "Belum dipilih";
+        row.classList.remove("has");
+      } else if (f.size === 0) {
+        // Umum di Android: file Google Drive yang belum diunduh terbaca 0 byte.
+        state[stateKey] = null;
+        $(nameId).textContent = `${f.name} — kosong (0 byte), download dulu ke HP`;
+        row.classList.remove("has");
+        showError(new Error(`"${f.name}" terbaca 0 byte.`));
+      } else {
+        $(nameId).textContent = `${f.name} · ${fmtSize(f.size)}`;
+        row.classList.add("has");
+        clearError();
+      }
       toggleProcess();
     });
   }
@@ -555,7 +631,8 @@
       showDash(1);
     } catch (err) {
       console.error(err);
-      setStatus("Gagal: " + err.message, "err");
+      setStatus("Gagal diproses.", "err");
+      showError(err);
     } finally {
       toggleProcess();
     }

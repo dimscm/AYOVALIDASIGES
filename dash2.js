@@ -89,39 +89,83 @@
     return g;
   }
 
-  function pushLine(out, periodes, ix, get) {
+  // Kolom LBP disimpan sebagai typed array + kamus string (interning).
+  // 400rb baris sebagai objek makan ~200 MB dan bikin HP kehabisan memori;
+  // versi ini sekitar 15 MB karena kode outlet/produk/salesman sangat berulang.
+  function makeStore() {
+    const dict = { outlet: new Map(), pcode: new Map(), group: new Map(), sls: new Map(), pd: new Map() };
+    const list = { outlet: [], pcode: [], group: [], sls: [], pd: [] };
+    // Nama & salesman dari LBP per outlet — dipakai kalau outlet tidak ada di DMP.
+    const outletNama = [];
+    const lbpSalesmanOf = [];
+    const intern = (k, v) => {
+      let i = dict[k].get(v);
+      if (i === undefined) { i = list[k].length; list[k].push(v); dict[k].set(v, i); }
+      return i;
+    };
+    return { dict, list, outletNama, lbpSalesmanOf, intern };
+  }
+
+  function growAll(c, cap) {
+    const grow = (arr, T) => { const n = new T(cap); n.set(arr); return n; };
+    c.outlet = grow(c.outlet, Int32Array);
+    c.pcode  = grow(c.pcode,  Int32Array);
+    c.group  = grow(c.group,  Int32Array);
+    c.sls    = grow(c.sls,    Int32Array);
+    c.pd     = grow(c.pd,     Int32Array);
+    c.qty    = grow(c.qty,    Float64Array);
+    c.karton = grow(c.karton, Float64Array);
+    c.amount = grow(c.amount, Float64Array);
+    c.retur  = grow(c.retur,  Uint8Array);
+    c.cap = cap;
+  }
+
+  function newCols(cap) {
+    return {
+      n: 0, cap,
+      outlet: new Int32Array(cap), pcode: new Int32Array(cap), group: new Int32Array(cap),
+      sls: new Int32Array(cap), pd: new Int32Array(cap),
+      qty: new Float64Array(cap), karton: new Float64Array(cap), amount: new Float64Array(cap),
+      retur: new Uint8Array(cap),
+    };
+  }
+
+  function pushLine(store, c, ix, get) {
     const outlet = get(ix.outlet);
     if (!outlet) return;
+    if (c.n === c.cap) growAll(c, Math.ceil(c.cap * 1.6));
     const isi = parseIsi(get(ix.kemasan));
     const qtypcs = num(get(ix.qty));
-    const periode = get(ix.periode);
-    if (periode) periodes.add(periode);
-    out.push({
-      outlet,
-      namaOutlet: get(ix.nama),
-      pcode: get(ix.pcode),
-      group: groupOf(get(ix.produk)),
-      isi, qtypcs,
-      karton: isi > 0 ? qtypcs / isi : 0,   // kolom turunan: karton = QTYPCS / isi
-      amount: num(get(ix.amount)),
-      periode,
-      salesman: get(ix.sls),
-      retur: get(ix.type).toUpperCase() === "R",
-    });
+    const oi = store.intern("outlet", outlet);
+    const sls = get(ix.sls);
+    if (store.outletNama[oi] === undefined) {
+      store.outletNama[oi] = get(ix.nama);
+      store.lbpSalesmanOf[oi] = sls;
+    }
+    const i = c.n++;
+    c.outlet[i] = oi;
+    c.pcode[i]  = store.intern("pcode", get(ix.pcode));
+    c.group[i]  = store.intern("group", groupOf(get(ix.produk)));
+    c.sls[i]    = store.intern("sls", sls);
+    c.pd[i]     = store.intern("pd", get(ix.periode));
+    c.qty[i]    = qtypcs;
+    c.karton[i] = isi > 0 ? qtypcs / isi : 0;   // kolom turunan: karton = QTYPCS / isi
+    c.amount[i] = num(get(ix.amount));
+    c.retur[i]  = get(ix.type).toUpperCase() === "R" ? 1 : 0;
   }
 
   async function parseLbp(file) {
-    const lines = [];
-    const periodes = new Set();
+    const store = makeStore();
+    let c = newCols(1 << 16);
 
     // Jalur cepat: sumber teks → iterasi per baris, tanpa materialisasi AoA penuh.
-    const text = await window.M3.readRawText(file);
+    let text = await window.M3.readRawText(file);
     if (text !== null) {
       const firstNl = text.indexOf("\n");
-      if (firstNl < 0) throw new Error("LBP kosong.");
-      const delim = window.M3.detectDelim(text.slice(0, firstNl).replace(/\r$/, ""));
-      const cols = text.slice(0, firstNl).replace(/\r$/, "").split(delim).map((s) => s.trim().toUpperCase());
-      const ix = colIndexes(cols);
+      if (firstNl < 0) throw new Error("File LBP kosong.");
+      const headLine = text.slice(0, firstNl).replace(/\r$/, "");
+      const delim = window.M3.detectDelim(headLine);
+      const ix = colIndexes(headLine.split(delim).map((s) => s.trim().toUpperCase()));
       let at = firstNl + 1;
       while (at < text.length) {
         let end = text.indexOf("\n", at);
@@ -130,21 +174,23 @@
         at = end + 1;
         if (!line) continue;
         const p = line.split(delim);
-        pushLine(lines, periodes, ix, (i) => (i >= 0 && p[i] != null ? p[i].trim() : ""));
+        pushLine(store, c, ix, (i) => (i >= 0 && p[i] != null ? p[i].trim() : ""));
       }
+      text = null;   // lepas string besar supaya bisa dibersihkan GC
     } else {
       // Sumber Excel → lewat AoA biasa.
       const rows = await window.M3.readAsAoA(file);
-      if (!rows.length) throw new Error("LBP kosong.");
-      const cols = rows[0].map((s) => String(s == null ? "" : s).trim().toUpperCase());
-      const ix = colIndexes(cols);
+      if (!rows.length) throw new Error("File LBP kosong.");
+      const ix = colIndexes(rows[0].map((s) => String(s == null ? "" : s).trim().toUpperCase()));
       for (let r = 1; r < rows.length; r++) {
         const row = rows[r];
         if (!row) continue;
-        pushLine(lines, periodes, ix, (i) => (i >= 0 && row[i] != null ? String(row[i]).trim() : ""));
+        pushLine(store, c, ix, (i) => (i >= 0 && row[i] != null ? String(row[i]).trim() : ""));
       }
     }
-    return { lines, periodes: [...periodes].sort((a, b) => num(a) - num(b)) };
+    if (!c.n) throw new Error("File LBP tidak berisi baris data.");
+    const periodes = store.list.pd.filter(Boolean).slice().sort((a, b) => num(a) - num(b));
+    return { store, cols: c, periodes };
   }
 
   // ---------- Aggregation ----------
@@ -154,44 +200,63 @@
     const sms = new Set([...document.querySelectorAll(".d2SalesmanItem")].filter((c) => c.checked).map((c) => c.value));
     const pds = new Set([...document.querySelectorAll(".d2PeriodeItem")].filter((c) => c.checked).map((c) => c.value));
 
-    // outlet -> { id, nama, salesman, rayon, groups:Set, karton, amount }
-    const outlets = new Map();
-    // group -> { group, pcodes:Set, outlets:Set, karton, pcs, amount }
-    const groups = new Map();
+    const c = S.cols, st = S.store;
+    if (!c) { S.outlets = new Map(); S.groups = new Map(); S.totalOutlet = 0; return; }
+    const L = st.list;
 
-    for (const l of S.lines) {
-      if (!inclRetur && l.retur) continue;
-      if (pds.size && !pds.has(l.periode)) continue;
-
-      const dmp = S.dmpIndex.get(l.outlet);
-      const salesman = (dmp && dmp.salesman) || l.salesman || "";
-      if (sms.size && !sms.has(salesman)) continue;
-
-      let o = outlets.get(l.outlet);
-      if (!o) {
-        o = {
-          id: l.outlet,
-          nama: (dmp && dmp.namaOutlet) || l.namaOutlet || "",
-          salesman,
-          rayon: (dmp && dmp.rayon) || "",
-          groups: new Set(), karton: 0, amount: 0,
+    // Identitas outlet (nama/salesman/rayon) dihitung sekali per outlet, bukan
+    // per baris — DMP dipakai kalau ada, kalau tidak jatuh ke nilai dari LBP.
+    if (!S.outletInfo) {
+      S.outletInfo = L.outlet.map((id, oi) => {
+        const d = S.dmpIndex.get(id);
+        return {
+          id,
+          nama: (d && d.namaOutlet) || st.outletNama[oi] || "",
+          salesman: (d && d.salesman) || st.lbpSalesmanOf[oi] || "",
+          rayon: (d && d.rayon) || "",
         };
-        outlets.set(l.outlet, o);
-      }
-      o.groups.add(l.group);
-      o.karton += l.karton;
-      o.amount += l.amount;
+      });
+    }
+    const info = S.outletInfo;
 
-      let g = groups.get(l.group);
-      if (!g) {
-        g = { group: l.group, pcodes: new Set(), outlets: new Set(), karton: 0, pcs: 0, amount: 0 };
-        groups.set(l.group, g);
+    // Filter diterjemahkan jadi lookup indeks sekali di depan, supaya loop
+    // per baris hanya membandingkan angka.
+    const okOutlet = sms.size ? new Uint8Array(info.length) : null;
+    if (okOutlet) for (let i = 0; i < info.length; i++) okOutlet[i] = sms.has(info[i].salesman) ? 1 : 0;
+    const okPd = pds.size ? new Uint8Array(L.pd.length) : null;
+    if (okPd) L.pd.forEach((v, i) => { okPd[i] = pds.has(v) ? 1 : 0; });
+
+    const outlets = new Map();   // outletId -> { id, nama, salesman, rayon, groups:Set, karton, amount }
+    const groups = new Map();    // grup -> { group, pcodes:Set, outlets:Set, karton, pcs, amount }
+
+    for (let i = 0; i < c.n; i++) {
+      if (!inclRetur && c.retur[i]) continue;
+      if (okPd && !okPd[c.pd[i]]) continue;
+      const oi = c.outlet[i];
+      if (okOutlet && !okOutlet[oi]) continue;
+
+      const meta = info[oi];
+      let o = outlets.get(meta.id);
+      if (!o) {
+        o = { ...meta, groups: new Set(), karton: 0, amount: 0 };
+        outlets.set(meta.id, o);
       }
-      if (l.pcode) g.pcodes.add(l.pcode);
-      g.outlets.add(l.outlet);
-      g.karton += l.karton;
-      g.pcs += l.qtypcs;
-      g.amount += l.amount;
+      const gName = L.group[c.group[i]];
+      o.groups.add(gName);
+      o.karton += c.karton[i];
+      o.amount += c.amount[i];
+
+      let g = groups.get(gName);
+      if (!g) {
+        g = { group: gName, pcodes: new Set(), outlets: new Set(), karton: 0, pcs: 0, amount: 0 };
+        groups.set(gName, g);
+      }
+      const pc = L.pcode[c.pcode[i]];
+      if (pc) g.pcodes.add(pc);
+      g.outlets.add(meta.id);
+      g.karton += c.karton[i];
+      g.pcs += c.qty[i];
+      g.amount += c.amount[i];
     }
 
     S.outlets = outlets;
@@ -381,7 +446,7 @@
   // ---------- Public API used by app.js ----------
 
   const S = {
-    lines: [], dmpIndex: new Map(),
+    store: null, cols: null, outletInfo: null, dmpIndex: new Map(),
     outlets: new Map(), groups: new Map(),
     coverageRows: [], gapRows: [], gapPage: 1, totalOutlet: 0,
   };
@@ -462,14 +527,16 @@
   window.M3D2 = {
     async process(file, dmpIndex) {
       window.M3.setStatus("Membaca LBP...");
-      const { lines, periodes } = await parseLbp(file);
-      S.lines = lines;
+      const { store, cols, periodes } = await parseLbp(file);
+      S.store = store;
+      S.cols = cols;
+      S.outletInfo = null;
       S.dmpIndex = dmpIndex || new Map();
       wireOnce();
 
       // Populate filters from data
       aggregate();
-      const salesmen = [...new Set([...S.outlets.values()].map((o) => o.salesman).filter(Boolean))].sort();
+      const salesmen = [...new Set(S.outletInfo.map((o) => o.salesman).filter(Boolean))].sort();
       fillList("d2FilterSalesmanList", salesmen, "d2SalesmanItem", S.ctrls.smCtrl, refresh);
       fillList("d2FilterPeriodeList", periodes, "d2PeriodeItem", S.ctrls.pdCtrl, refresh);
       const groupNames = [...S.groups.keys()].sort();
@@ -477,10 +544,11 @@
 
       refresh();
       $("d2ResultSection").classList.remove("hidden");
-      return `LBP ${fmtInt(lines.length)} baris → ${fmtInt(S.groups.size)} produk, ${fmtInt(S.outlets.size)} outlet`;
+      return `LBP ${fmtInt(cols.n)} baris → ${fmtInt(S.groups.size)} produk, ${fmtInt(S.outlets.size)} outlet`;
     },
     reset() {
-      S.lines = []; S.outlets = new Map(); S.groups = new Map();
+      S.store = null; S.cols = null; S.outletInfo = null;
+      S.outlets = new Map(); S.groups = new Map();
       S.coverageRows = []; S.gapRows = []; S.gapPage = 1; S.totalOutlet = 0;
       const rs = $("d2ResultSection");
       if (rs) rs.classList.add("hidden");

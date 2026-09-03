@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>M3 Beverage Mayora</title>
-  <link rel="stylesheet" href="styles.css?v=13" />
+  <link rel="stylesheet" href="styles.css?v=14" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23c8102e'/%3E%3Ctext x='50' y='62' font-size='34' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EM3%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -26,7 +26,7 @@
 
       <div class="filelist">
         <label class="frow" id="rowEdi">
-          <input type="file" id="ediFile" accept=".xlsx,.xls,.txt,.csv,.7z,.zip,.gz" />
+          <input type="file" id="ediFile" accept="*/*" />
           <span class="fmark"></span>
           <span class="fmain">
             <b>EDI Flag Radius</b>
@@ -37,7 +37,7 @@
         </label>
 
         <label class="frow" id="rowHht">
-          <input type="file" id="hhtFile" accept=".xlsx,.xls,.txt,.csv,.7z,.zip,.gz" />
+          <input type="file" id="hhtFile" accept="*/*" />
           <span class="fmark"></span>
           <span class="fmain">
             <b>HHT / Scan</b>
@@ -48,7 +48,7 @@
         </label>
 
         <label class="frow" id="rowDmp">
-          <input type="file" id="dmpFile" accept=".txt,.csv,.xlsx,.xls,.zip,.gz,.7z" />
+          <input type="file" id="dmpFile" accept="*/*" />
           <span class="fmark"></span>
           <span class="fmain">
             <b>Master Data DMP</b>
@@ -59,7 +59,7 @@
         </label>
 
         <label class="frow" id="rowLbp">
-          <input type="file" id="lbpFile" accept=".txt,.csv,.xlsx,.xls,.zip,.gz,.7z" />
+          <input type="file" id="lbpFile" accept="*/*" />
           <span class="fmark"></span>
           <span class="fmain">
             <b>LBP &mdash; Laporan Penjualan</b>
@@ -75,6 +75,7 @@
         <button id="resetBtn" class="ghost">Reset</button>
         <span id="status" class="status"></span>
       </div>
+      <div class="errbox hidden" id="errBox"></div>
     </section>
 
     <!-- Compact strip shown after processing -->
@@ -317,13 +318,13 @@
       </section>
     </div>
 
-    <p class="credit">dimscm &middot; v13</p>
+    <p class="credit">dimscm &middot; v14</p>
   </main>
 
   <script src="vendor/xlsx.full.min.js"></script>
   <script src="vendor/jszip.min.js"></script>
   <script src="vendor/7zz.umd.js"></script>
-  <script src="app.js?v=13"></script>
-  <script src="dash2.js?v=13"></script>
+  <script src="app.js?v=14"></script>
+  <script src="dash2.js?v=14"></script>
 </body>
 </html>

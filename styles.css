@@ -304,8 +304,73 @@ body.full-cols .col-x { display: table-cell; }
   font-size: 10px; letter-spacing: .12em; color: #c3c7ce; user-select: none;
 }
 
-@media (max-width: 640px) {
-  .toolbar > input { min-width: 100%; }
-  .multi-btn { min-width: 140px; }
+/* Kotak error yang terlihat jelas — penting di HP, di mana console tidak terjangkau. */
+.errbox {
+  margin-top: 12px; padding: 12px 14px; border-radius: var(--r);
+  background: var(--bad-bg); border: 1px solid var(--bad); color: var(--bad);
+  font-size: 13px; line-height: 1.5;
 }
+.errbox b { display: block; margin-bottom: 3px; }
+.errbox .hint { color: var(--ink-2); font-size: 12px; margin-top: 6px; display: block; }
+
+/* ---------- Mobile ---------- */
+@media (max-width: 720px) {
+  body { font-size: 15px; }
+  main { padding: 0 12px 40px; margin-top: 12px; }
+  .brand { padding: 12px 14px; }
+  .topbar h1 { font-size: 15px; }
+  .card { padding: 16px 14px; border-radius: 10px; }
+  .upload-card { padding: 18px 14px; }
+
+  /* Baris file: tombol "Pilih" turun, area sentuh lebih besar */
+  .frow { padding: 14px 12px; gap: 10px; flex-wrap: wrap; }
+  .fmain { flex: 1 1 100%; order: 2; }
+  .fmark { order: 1; }
+  .fbtn { order: 1; margin-left: auto; padding: 7px 16px; }
+  .fmain b { font-size: 15px; }
+
+  .actions { gap: 8px; }
+  button.big { flex: 1; padding: 13px 20px; }
+  .status { flex-basis: 100%; }
+
+  /* Strip file: susun ke bawah */
+  .loaded-bar { flex-wrap: wrap; gap: 8px; padding: 12px 14px; }
+  .lb-files { flex-basis: 100%; gap: 10px; }
+  .lb-status { flex-basis: 100%; }
+  #changeFilesBtn { margin-left: auto; }
+
+  /* Tab: bagi rata selebar layar */
+  .tabs-inner { width: 100%; }
+  .tab { flex: 1; padding: 12px 8px; font-size: 13.5px; text-align: center; }
+
+  /* Filter: satu per baris supaya mudah disentuh */
+  .toolbar { gap: 8px; }
+  .toolbar > input, .toolbar > select, .multi, .check-toggle, .toolbar > button {
+    flex: 1 1 100%; min-width: 0; width: 100%;
+  }
+  .multi-btn { width: 100%; min-width: 0; padding: 10px 28px 10px 12px; }
+  .multi-menu { position: fixed; left: 12px; right: 12px; width: auto; min-width: 0; max-height: 60vh; }
+  .multi-menu.wide { min-width: 0; }
+  .multi-opt { padding: 10px; }
+  .check-toggle { padding: 10px 12px; justify-content: flex-start; }
+  .toolbar > button { padding: 11px 16px; }
+
+  .summary { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .stat b { font-size: 19px; }
+
+  .sec-head { flex-wrap: wrap; gap: 6px; }
+  .count { margin-left: auto; }
+
+  /* Tabel: geser horizontal, jangan bikin halaman melebar */
+  .table-wrap { -webkit-overflow-scrolling: touch; }
+  table { font-size: 12px; }
+  th, td { padding: 8px; }
+  .hgrid { grid-template-columns: 1fr; }
+  .pager button { padding: 10px 18px; }
+}
+
+@media (max-width: 380px) {
+  .summary { grid-template-columns: 1fr; }
+}
+
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
