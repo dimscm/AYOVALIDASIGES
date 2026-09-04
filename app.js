@@ -174,8 +174,16 @@
     // hanya muncul di baris pertama per grup).
     let lastSls = "", lastSalesforce = "", lastTanggal = "";
     const rows = [];
+    // Laporan berhalaman biasanya mengulang baris judul kolom di tiap halaman.
+    // Kalau ikut dibaca sebagai data, teks "Tanggal" akan menimpa tanggal yang
+    // sedang di-forward-fill, dan seluruh baris sesudahnya kehilangan tanggal.
+    const isBarisHeader = (row) => {
+      const v = normalizeHeader(row[iOutlet]);
+      return v === "NO OUTLET" || v === "NOOUTLET";
+    };
     for (let r = headerAt + 1; r < aoa.length; r++) {
       const row = aoa[r] || [];
+      if (isBarisHeader(row)) continue;
       if (iSls >= 0 && row[iSls]) lastSls = String(row[iSls]).trim();
       if (iSalesforce >= 0 && row[iSalesforce]) lastSalesforce = String(row[iSalesforce]).trim();
       if (iTanggal >= 0 && row[iTanggal]) lastTanggal = String(row[iTanggal]).trim();
@@ -309,6 +317,7 @@
     gz:    [0x1F, 0x8B],
     ole2:  [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1], // .xls lama
     zip:   [0x50, 0x4B],                                     // .zip dan .xlsx
+    pdf:   [0x25, 0x50, 0x44, 0x46],                         // "%PDF"
   };
 
   async function sniff(src) {
@@ -319,6 +328,7 @@
     if (is(SIG["7z"])) return "7z";
     if (is(SIG.gz)) return "gz";
     if (is(SIG.ole2)) return "xls";
+    if (is(SIG.pdf)) return "pdf";
     if (is(SIG.zip)) return "zip";   // bisa .xlsx atau archive biasa
     return "text";
   }
@@ -423,11 +433,171 @@
       return await readAsAoA(bytes, depth + 1);
     }
     if (kind === "xls") return excelToAoA(await bytesOf(src));
+    if (kind === "pdf") return await pdfToAoA(await bytesOf(src));
 
     const text = typeof src.text === "function"
       ? await src.text()
       : new TextDecoder("utf-8").decode(src);
     return parseDelimitedText(text);
+  }
+
+  // ---------- PDF ----------
+  // PDF tidak menyimpan tabel, hanya potongan teks beserta koordinatnya. Jadi
+  // barisnya disusun ulang dari posisi Y, dan kolomnya dari posisi X: semua
+  // posisi X di seluruh halaman dikumpulkan lalu dikelompokkan jadi "titik
+  // kolom", baru tiap potongan teks ditaruh di kolom terdekat. Cara ini bekerja
+  // untuk laporan yang tercetak rapi berkolom seperti HHT.
+  // pdf.js berukuran ~380 KB dan hanya dipakai kalau memang ada file PDF, jadi
+  // baru diunduh saat dibutuhkan supaya halaman tetap ringan dibuka di HP.
+  let pdfSiap = null;
+  function muatPdfJs() {
+    if (pdfSiap) return pdfSiap;
+    pdfSiap = new Promise((resolve, reject) => {
+      if (typeof pdfjsLib !== "undefined") return resolve();
+      const el = document.createElement("script");
+      el.src = "vendor/pdf.min.js";
+      el.onload = () => (typeof pdfjsLib === "undefined"
+        ? reject(new Error("Modul PDF gagal dimuat."))
+        : resolve());
+      el.onerror = () => reject(new Error("Modul PDF gagal dimuat."));
+      document.head.appendChild(el);
+    }).catch((e) => { pdfSiap = null; throw e; });
+    return pdfSiap;
+  }
+
+  async function pdfToAoA(buf) {
+    try {
+      await muatPdfJs();
+    } catch (e) {
+      throw new Error("Modul PDF gagal dimuat. Pakai versi Excel/CSV dari HHT.");
+    }
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "vendor/pdf.worker.min.js";
+    const pdf = await pdfjsLib.getDocument({ data: buf, isEvalSupported: false }).promise;
+
+    const pages = [];
+    const tinggi = [];
+    for (let n = 1; n <= pdf.numPages; n++) {
+      const page = await pdf.getPage(n);
+      const tc = await page.getTextContent();
+      const items = [];
+      for (const it of tc.items) {
+        const teks = String(it.str == null ? "" : it.str);
+        if (!teks.trim()) continue;
+        const x = it.transform[4], y = it.transform[5];
+        if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+        items.push({ teks, x, y, lebar: Number(it.width) || 0 });
+        if (it.height) tinggi.push(it.height);
+      }
+      if (items.length) pages.push(items);
+      page.cleanup();
+    }
+    if (!pages.length) {
+      throw new Error("PDF ini tidak punya teks yang bisa dibaca — kemungkinan hasil scan/foto. "
+        + "Perlu versi Excel/CSV-nya, atau PDF yang sudah di-OCR.");
+    }
+
+    const tengah = (a) => { const v = a.slice().sort((x, y) => x - y); return v[Math.floor(v.length / 2)]; };
+    const tinggiBaris = tinggi.length ? tengah(tinggi) : 10;
+    const tolBaris = Math.max(2, tinggiBaris * 0.6);
+    // Jarak mendatar yang dianggap pindah sel. Spasi antar kata di dalam satu sel
+    // lebih rapat daripada jarak antar kolom (kolom punya padding + garis).
+    const tolSel = Math.max(2, tinggiBaris * 0.6);
+
+    // 1) Susun baris memakai Y (Y di PDF dihitung dari bawah).
+    const semuaBaris = [];
+    for (const items of pages) {
+      items.sort((a, b) => (b.y - a.y) || (a.x - b.x));
+      let kini = null;
+      for (const it of items) {
+        if (kini && Math.abs(kini.y - it.y) <= tolBaris) kini.items.push(it);
+        else { kini = { y: it.y, items: [it] }; semuaBaris.push(kini); }
+      }
+    }
+
+    // 2) Di tiap baris, gabungkan potongan yang berdempetan jadi satu sel.
+    //    pdf.js kerap memecah satu sel jadi beberapa potongan; kalau posisi X
+    //    pecahan itu ikut dianggap awal kolom, kolom-kolom akan saling menempel.
+    for (const b of semuaBaris) {
+      b.items.sort((a, c) => a.x - c.x);
+      const sel = [];
+      for (const it of b.items) {
+        const akhir = sel[sel.length - 1];
+        if (akhir && it.x - (akhir.x + akhir.lebar) <= tolSel) {
+          const perlu = !/\s$/.test(akhir.teks) && !/^\s/.test(it.teks)
+            && it.x - (akhir.x + akhir.lebar) > tinggiBaris * 0.12;
+          akhir.teks += (perlu ? " " : "") + it.teks;
+          akhir.lebar = (it.x + it.lebar) - akhir.x;
+        } else {
+          sel.push({ x: it.x, lebar: it.lebar, teks: it.teks });
+        }
+      }
+      b.sel = sel;
+    }
+
+    // 3) Titik kolom dikumpulkan dari awal SEL (bukan awal potongan), lalu yang
+    //    berdekatan digabung. Kolom yang isinya jarang — misalnya Salesman yang
+    //    hanya ditulis di baris pertama tiap grup — tetap ikut terdaftar.
+    const awalSel = [];
+    for (const b of semuaBaris) for (const c of b.sel) awalSel.push(c.x);
+    awalSel.sort((a, b) => a - b);
+    const tolKolom = Math.max(3, tinggiBaris * 0.9);
+    const titik = [];
+    for (const x of awalSel) {
+      if (!titik.length || x - titik[titik.length - 1] > tolKolom) titik.push(x);
+    }
+
+    // Pemetaan akhir memakai potongan ASLI, bukan sel hasil langkah 2. Sebabnya
+    // baris header dicetak tebal sehingga hampir memenuhi selnya — jaraknya jadi
+    // terlalu rapat dan aturan jarak menyatukannya. Titik kolom sendiri sudah
+    // tepercaya karena diambil dari ratusan baris data. Tiap potongan diberikan
+    // ke titik kolom terdekat DI SEBELAH KIRI, supaya pecahan di tengah sel
+    // tetap kembali ke kolomnya.
+    const kolomDari = (x) => {
+      let i = 0;
+      while (i + 1 < titik.length && titik[i + 1] <= x + tolKolom * 0.5) i++;
+      return i;
+    };
+
+    // Sebagian PDF mencetak beberapa sel sekaligus sebagai satu potongan teks
+    // (baris judul kolom sering begitu). Posisinya cuma satu, jadi tidak bisa
+    // dipisah dari koordinat potongan. Tapi lebar potongan diketahui, sehingga
+    // posisi tiap KATA bisa ditaksir dari letak hurufnya — cukup akurat untuk
+    // mengembalikan tiap kata ke kolomnya.
+    function pecahLintasKolom(it) {
+      if (!(it.lebar > 0)) return [it];
+      const adaDiDalam = titik.some(
+        (t) => t > it.x + tolKolom * 0.5 && t < it.x + it.lebar - tolKolom * 0.2);
+      if (!adaDiDalam) return [it];
+      const total = it.teks.length || 1;
+      const out = [];
+      const re = /\S+/g;
+      let m;
+      while ((m = re.exec(it.teks)) !== null) {
+        out.push({
+          teks: m[0],
+          x: it.x + it.lebar * (m.index / total),
+          lebar: it.lebar * (m[0].length / total),
+        });
+      }
+      return out.length ? out : [it];
+    }
+
+    const aoa = [];
+    for (const b of semuaBaris) {
+      const kolom = [];
+      for (const raw of b.items) {
+        for (const c of pecahLintasKolom(raw)) {
+          const i = kolomDari(c.x);
+          kolom[i] = kolom[i] == null ? c.teks : kolom[i] + " " + c.teks;
+        }
+      }
+      for (let i = 0; i < kolom.length; i++) {
+        kolom[i] = kolom[i] == null ? "" : String(kolom[i]).replace(/\s+/g, " ").trim();
+      }
+      if (kolom.some((v) => v !== "")) aoa.push(kolom);
+    }
+    if (aoa.length < 2) throw new Error("Isi PDF tidak terbaca sebagai tabel.");
+    return aoa;
   }
 
   function excelToAoA(buf) {

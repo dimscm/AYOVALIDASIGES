@@ -432,3 +432,6 @@ tr.row-nil td { background: #fffbfb; }
   border-radius: 3px; font-size: 10.5px; white-space: nowrap;
 }
 .pinjam::before { content: "↩ "; }
+
+/* Keterangan format file yang diterima, di bawah nama file. */
+.fhint { display: block; font-size: 10.5px; color: var(--muted); margin-top: 1px; }
