@@ -149,27 +149,86 @@
     return s;
   }
 
+  // Judul kolom dicari dengan longgar: cocok persis dulu, baru awalan, baru
+  // "mengandung". Perlu karena penulisannya berbeda-beda antar sumber ("No
+  // Outlet", "No. Outlet", "Kode Outlet"), apalagi kalau berasal dari PDF yang
+  // judulnya hasil susun ulang.
+  function cariKolom(header, alias) {
+    for (const a of alias) { const i = header.indexOf(a); if (i >= 0) return i; }
+    for (const a of alias) {
+      const i = header.findIndex((h) => h && h.startsWith(a));
+      if (i >= 0) return i;
+    }
+    for (const a of alias) {
+      const i = header.findIndex((h) => h && h.includes(a));
+      if (i >= 0) return i;
+    }
+    return -1;
+  }
+
   function parseHht(aoa) {
-    let headerAt = -1;
-    for (let r = 0; r < Math.min(aoa.length, 30); r++) {
-      const norm = (aoa[r] || []).map(normalizeHeader);
-      if (norm.includes("NO OUTLET") && norm.includes("NAMA OUTLET") && norm.includes("HHT")) {
-        headerAt = r; break;
+    const ALIAS = {
+      outlet: ["NO OUTLET", "NO. OUTLET", "NOOUTLET", "KODE OUTLET", "CUSTNO", "OUTLET"],
+      nama:   ["NAMA OUTLET", "NAMA TOKO", "NAMAOUTLET", "NAMA"],
+      hht:    ["HHT"],
+      tipe:   ["TIPE SCAN", "TIPESCAN", "JENIS SCAN", "TYPE SCAN"],
+      call:   ["CALL"],
+      alasan: ["ALASAN", "KETERANGAN", "REASON"],
+      jamIn:  ["JAM MASUK", "JAM IN", "JAMMASUK"],
+      jamOut: ["JAM KELUAR", "JAM OUT", "JAMKELUAR"],
+      sls:    ["SALESMAN", "NAMA SALESMAN"],
+      sf:     ["SALESFORCE", "KODE SALESFORCE"],
+      tgl:    ["TANGGAL", "TGL", "DATE"],
+    };
+    // Judul kolom di PDF sering terbelah 2-3 baris karena kolomnya sempit
+    // ("No" di atas, "Outlet" di bawahnya). Jadi selain baris tunggal, gabungan
+    // beberapa baris berurutan juga dicoba.
+    const gabungBaris = (mulai, banyak) => {
+      const out = [];
+      for (let k = 0; k < banyak; k++) {
+        const row = aoa[mulai + k] || [];
+        for (let i = 0; i < row.length; i++) {
+          const v = String(row[i] == null ? "" : row[i]).trim();
+          if (!v) continue;
+          out[i] = out[i] ? out[i] + " " + v : v;
+        }
+      }
+      return out.map(normalizeHeader);
+    };
+    const cocokHeader = (norm) =>
+      norm.some((h) => h && h.includes("OUTLET")) &&
+      norm.some((h) => h && (h === "HHT" || h.includes("SCAN")));
+
+    let headerAt = -1, header = null;
+    for (let r = 0; r < Math.min(aoa.length, 30) && headerAt < 0; r++) {
+      for (let n = 1; n <= 3 && r + n <= aoa.length; n++) {
+        const norm = gabungBaris(r, n);
+        if (cocokHeader(norm)) { headerAt = r + n - 1; header = norm; break; }
       }
     }
-    if (headerAt < 0) return { rows: [], warn: "Header HHT tidak dikenali. Kolom HHT diabaikan." };
-    const header = aoa[headerAt].map(normalizeHeader);
-    const iOutlet = header.indexOf("NO OUTLET");
-    const iName = header.indexOf("NAMA OUTLET");
-    const iHht = header.indexOf("HHT");
-    const iTipe = header.indexOf("TIPE SCAN");
-    const iCall = header.indexOf("CALL");
-    const iAlasan = header.indexOf("ALASAN");
-    const iJamIn = header.indexOf("JAM MASUK");
-    const iJamOut = header.indexOf("JAM KELUAR");
-    const iSls = header.indexOf("SALESMAN");
-    const iSalesforce = header.indexOf("SALESFORCE");
-    const iTanggal = header.indexOf("TANGGAL");
+    if (headerAt < 0) {
+      // Sebutkan apa yang benar-benar terbaca. Pesan "tidak dikenali" saja bikin
+      // pengguna mengira filenya tidak terbaca, padahal isinya terbaca tapi
+      // judul kolomnya tidak ketemu.
+      const potong = (t, n) => (t.length > n ? t.slice(0, n - 1) + "…" : t);
+      const contoh = aoa.slice(0, 3)
+        .map((r) => potong((r || []).filter((c) => String(c).trim()).slice(0, 8).join(" | "), 90))
+        .filter(Boolean);
+      return { rows: [], warn: "Judul kolom HHT tidak ketemu — butuh kolom yang memuat "
+        + "\"Outlet\" dan \"HHT\"/\"Scan\". Yang terbaca di awal file: "
+        + (contoh.length ? contoh.map((c) => `[${c}]`).join(" ") : "(kosong)") };
+    }
+    const iOutlet = cariKolom(header, ALIAS.outlet);
+    const iName = cariKolom(header, ALIAS.nama);
+    const iHht = cariKolom(header, ALIAS.hht);
+    const iTipe = cariKolom(header, ALIAS.tipe);
+    const iCall = cariKolom(header, ALIAS.call);
+    const iAlasan = cariKolom(header, ALIAS.alasan);
+    const iJamIn = cariKolom(header, ALIAS.jamIn);
+    const iJamOut = cariKolom(header, ALIAS.jamOut);
+    const iSls = cariKolom(header, ALIAS.sls);
+    const iSalesforce = cariKolom(header, ALIAS.sf);
+    const iTanggal = cariKolom(header, ALIAS.tgl);
     // Forward-fill kolom yang di-merge di Excel (Salesman, Salesforce, Tanggal
     // hanya muncul di baris pertama per grup).
     let lastSls = "", lastSalesforce = "", lastTanggal = "";
