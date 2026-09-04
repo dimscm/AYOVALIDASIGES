@@ -198,6 +198,33 @@
     return { rows };
   }
 
+  // Tanggal EDI ("24/08/2026", serial Excel, Date) dan HHT ("29 JUL") ditulis
+  // dengan bentuk berbeda, dan HHT sering tidak menulis tahun. Supaya bisa
+  // dijodohkan, keduanya diringkas jadi kunci "dd-mm".
+  const BULAN = {
+    JAN: 1, FEB: 2, MAR: 3, APR: 4, MAY: 5, MEI: 5, JUN: 6, JUL: 7,
+    AUG: 8, AGT: 8, AGU: 8, SEP: 9, OCT: 10, OKT: 10, NOV: 11, DEC: 12, DES: 12,
+  };
+  const pad2 = (n) => String(n).padStart(2, "0");
+
+  function tglKunci(v) {
+    if (v === null || v === undefined || v === "") return "";
+    if (v instanceof Date) return pad2(v.getDate()) + "-" + pad2(v.getMonth() + 1);
+    if (typeof v === "number") {
+      // Serial Excel: hari sejak 30 Des 1899.
+      const d = new Date(Date.UTC(1899, 11, 30) + v * 86400000);
+      return pad2(d.getUTCDate()) + "-" + pad2(d.getUTCMonth() + 1);
+    }
+    const s = String(v).trim().toUpperCase();
+    let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);          // 2026-08-24
+    if (m) return pad2(+m[3]) + "-" + pad2(+m[2]);
+    m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})/);                 // 24/08/2026
+    if (m) return pad2(+m[1]) + "-" + pad2(+m[2]);
+    m = s.match(/^(\d{1,2})[\s-]+([A-Z]{3})/);                 // 29 JUL
+    if (m && BULAN[m[2]]) return pad2(+m[1]) + "-" + pad2(BULAN[m[2]]);
+    return "";
+  }
+
   // Alasan dari HHT detail (mis. "B4-Order By Phone", "B6-Tertutup Barang").
   // Nilai " -" / "-" berarti tidak ada alasan tercatat.
   function alasanHht(r) {
@@ -205,6 +232,17 @@
     const a = String(r.hht.alasan || "").trim();
     if (!a || a === "-" || a === "—") return "";
     return a;
+  }
+
+  // Kolom alasan yang kosong itu membingungkan: pengguna tidak tahu apakah
+  // datanya memang tidak ada, atau webnya yang gagal. Jadi sebabnya ditulis.
+  function alasanSel(r) {
+    if (!state.hhtFile) return '<span class="nil">HHT tidak diupload</span>';
+    const a = alasanHht(r);
+    if (a) return escapeHtml(a);
+    if (r.hht) return '<span class="nil">tidak dicatat di HHT</span>';
+    if (r.hhtNote === "beda-tanggal") return '<span class="nil">tanggal ini tidak ada di HHT</span>';
+    return '<span class="nil">outlet tidak ada di HHT</span>';
   }
 
   function isScanned(hht) {
@@ -614,21 +652,47 @@
 
       state.scanIndex = new Map();
       let hhtWarn = "";
+      let hhtTglTerbaca = 0;
+      const hhtTanggalSet = new Set();
+      state.scanByOutlet = new Map();
       if (state.hhtFile) {
         setStatus("Membaca HHT...");
         const hhtAoa = await readWorkbook(state.hhtFile);
         const parsed = parseHht(hhtAoa);
         state.hhtRows = parsed.rows;
         hhtWarn = parsed.warn || "";
+        // Dijodohkan per outlet DAN per tanggal. Kalau hanya per outlet, kunjungan
+        // tanggal 24 Agustus bisa mengambil alasan & status scan dari kunjungan
+        // tanggal 5 Agustus — kategorinya jadi salah, bukan cuma alasannya.
         for (const h of state.hhtRows) {
           const k = String(h.custno);
-          if (!state.scanIndex.has(k) || isScanned(h)) state.scanIndex.set(k, h);
+          const t = tglKunci(h.tanggal);
+          if (t) {
+            hhtTglTerbaca++;
+            const kk = k + "|" + t;
+            if (!state.scanIndex.has(kk) || isScanned(h)) state.scanIndex.set(kk, h);
+            hhtTanggalSet.add(t);
+          }
+          if (!state.scanByOutlet.has(k) || isScanned(h)) state.scanByOutlet.set(k, h);
         }
       }
+      // Kalau kolom TANGGAL di HHT tidak terbaca sama sekali, jangan bikin semua
+      // jadi tidak cocok — kembali ke pencocokan per outlet saja.
+      const pakaiTanggal = hhtTglTerbaca > 0;
 
       setStatus("Kategorisasi...");
       const results = state.ediRows.map((r) => {
-        const hht = state.scanIndex.get(r.custno);
+        const tgl = tglKunci(r.visitDate);
+        let hht = null, hhtNote = "";
+        if (state.hhtFile) {
+          if (pakaiTanggal && tgl) {
+            hht = state.scanIndex.get(r.custno + "|" + tgl) || null;
+            if (!hht) hhtNote = state.scanByOutlet.has(r.custno) ? "beda-tanggal" : "tidak-ada";
+          } else {
+            hht = state.scanByOutlet.get(r.custno) || null;
+            if (!hht) hhtNote = "tidak-ada";
+          }
+        }
         const dmp = state.dmpIndex.get(r.custno);
         const cat = categorize(r, hht);
         // Sumber: DMP (paling akurat) > HHT > EDI. Fallback kalau kosong.
@@ -637,7 +701,7 @@
         const alamatEff = (dmp && dmp.alamat) || r.alamatToko || "";
         const rayonEff = (dmp && dmp.rayon) || r.team || "";
         const cycleEff = (dmp && dmp.cycle) || r.cycle || "";
-        return { ...r, hht, dmp, category: cat, namaTokoEff, salesmanEff, alamatEff, rayonEff, cycleEff };
+        return { ...r, hht, hhtNote, dmp, category: cat, namaTokoEff, salesmanEff, alamatEff, rayonEff, cycleEff };
       });
 
       // Consistency per outlet: bandingkan semua kunjungan outlet yang sama.
@@ -679,9 +743,39 @@
       if (state.hhtFile) {
         const matched = results.filter((r) => r.hht).length;
         msg.push(`${matched.toLocaleString("id-ID")} cocok HHT`);
+        // Kalau tidak ada satu pun tanggal yang beririsan, semua kunjungan akan
+        // tampil "Tidak scan" tanpa alasan. Itu bukan temuan lapangan, itu file
+        // yang tidak sepasang — harus dibilang, bukan dibiarkan diam.
+        const ediTgl = new Set(results.map((r) => tglKunci(r.visitDate)).filter(Boolean));
+        const irisan = [...ediTgl].filter((d) => hhtTanggalSet.has(d));
+        if (pakaiTanggal && ediTgl.size && hhtTanggalSet.size && !irisan.length) {
+          const rapi = (set) => [...set].sort((a, b) => {
+            const [da, ma] = a.split("-"), [db, mb] = b.split("-");
+            return (ma + da).localeCompare(mb + db);
+          });
+          const rentang = (set) => {
+            const v = rapi(set);
+            return v.length === 1 ? v[0] : `${v[0]} s/d ${v[v.length - 1]}`;
+          };
+          state.periodeWarn =
+            `Tanggal di EDI (${rentang(ediTgl)}) dan di HHT (${rentang(hhtTanggalSet)}) `
+            + `tidak ada yang sama. Karena itu kolom Scan dan Alasan Tidak Scan kosong: `
+            + `HHT tidak punya catatan untuk hari-hari tersebut. Upload HHT periode yang sama `
+            + `dengan EDI supaya kategorinya benar.`;
+        } else {
+          state.periodeWarn = "";
+        }
       } else {
         msg.push("tanpa HHT — scan dianggap tidak ada");
+        state.periodeWarn = "";
       }
+      const wb = $("d1Warn");
+      if (wb) {
+        wb.innerHTML = state.periodeWarn
+          ? `<b>Periode EDI dan HHT tidak bertemu.</b> ${escapeHtml(state.periodeWarn)}` : "";
+        wb.classList.toggle("hidden", !state.periodeWarn);
+      }
+
       if (hhtWarn) msg.push(hhtWarn);
       setStatus(msg.join(" · "), "ok");
       collapseUpload();
@@ -796,7 +890,7 @@
         <td class="mono">${escapeHtml(r.flagRadius || "BLANK")}</td>
         <td class="col-x mono">${dist}</td>
         <td class="mono">${hhtCell}</td>
-        <td>${escapeHtml(alasanHht(r))}</td>
+        <td>${alasanSel(r)}</td>
         <td class="col-x">${escapeHtml(r.alorReason || "")}</td>
         <td>${escapeHtml(info.suggest)}</td>
       </tr>`;
