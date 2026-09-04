@@ -199,11 +199,25 @@
       norm.some((h) => h && h.includes("OUTLET")) &&
       norm.some((h) => h && (h === "HHT" || h.includes("SCAN")));
 
-    let headerAt = -1, header = null;
-    for (let r = 0; r < Math.min(aoa.length, 30) && headerAt < 0; r++) {
+    // Jangan ambil kandidat PERTAMA yang lolos. Baris preamble laporan memuat
+    // teks seperti "Tipe Scan : ALL" dan "Pilihan Data", sehingga ikut lolos
+    // pemeriksaan dasar dan pencarian berhenti terlalu awal. Yang dipilih adalah
+    // kandidat yang paling banyak menghasilkan kolom BERBEDA — baris judul yang
+    // asli mengenali hampir semua kolom, sedangkan preamble hanya sedikit.
+    let headerAt = -1, header = null, skorTerbaik = 0;
+    const kunciAlias = Object.keys(ALIAS);
+    for (let r = 0; r < Math.min(aoa.length, 300); r++) {
       for (let n = 1; n <= 3 && r + n <= aoa.length; n++) {
         const norm = gabungBaris(r, n);
-        if (cocokHeader(norm)) { headerAt = r + n - 1; header = norm; break; }
+        if (!cocokHeader(norm)) continue;
+        const dipakai = new Set();
+        for (const k of kunciAlias) {
+          const i = cariKolom(norm, ALIAS[k]);
+          if (i >= 0) dipakai.add(i);
+        }
+        if (dipakai.size > skorTerbaik) {
+          skorTerbaik = dipakai.size; headerAt = r + n - 1; header = norm;
+        }
       }
     }
     if (headerAt < 0) {
@@ -596,14 +610,79 @@
     // 3) Titik kolom dikumpulkan dari awal SEL (bukan awal potongan), lalu yang
     //    berdekatan digabung. Kolom yang isinya jarang — misalnya Salesman yang
     //    hanya ditulis di baris pertama tiap grup — tetap ikut terdaftar.
-    const awalSel = [];
-    for (const b of semuaBaris) for (const c of b.sel) awalSel.push(c.x);
-    awalSel.sort((a, b) => a - b);
     const tolKolom = Math.max(3, tinggiBaris * 0.9);
-    const titik = [];
-    for (const x of awalSel) {
-      if (!titik.length || x - titik[titik.length - 1] > tolKolom) titik.push(x);
+    const awalSel = [];
+    semuaBaris.forEach((b, bi) => b.sel.forEach((c) => awalSel.push({ x: c.x, bi })));
+    awalSel.sort((a, b) => a.x - b.x);
+    const klaster = [];
+    for (const t of awalSel) {
+      const k = klaster[klaster.length - 1];
+      if (!k || t.x - k.akhir > tolKolom) klaster.push({ awal: t.x, akhir: t.x, baris: new Set([t.bi]) });
+      else { k.akhir = t.x; k.baris.add(t.bi); }
     }
+    // Judul laporan dan baris preamble ("Halaman : 1 of 114", daftar salesman)
+    // meletakkan teks di posisi X sembarang. Kalau posisi itu ikut dianggap awal
+    // kolom, jumlah kolom membengkak dan nama toko jadi terpecah-pecah. Awal
+    // kolom yang asli dipakai berulang oleh BANYAK baris, preamble tidak — jadi
+    // yang dipakai hanya klaster yang didukung cukup banyak baris.
+    const minBaris = Math.max(3, Math.floor(semuaBaris.length * 0.03));
+    // Penyaringan jumlah pendukung SENGAJA ditunda sampai setelah penggabungan.
+    // Kolom yang isinya rata tengah punya beberapa posisi awal yang masing-masing
+    // hanya didukung sedikit baris — misalnya alasan panjang "B4-Order By Phone"
+    // yang mulai lebih ke kiri daripada "-". Kalau disaring lebih dulu, posisi itu
+    // hilang dan separuh teks alasan jatuh ke kolom sebelahnya.
+    let kandidat = klaster;
+
+    // Penyaring kedua, yang menentukan: batas kolom sejati TIDAK PERNAH dilintasi
+    // teks — antar kolom tidak saling tumpang tindih. Sebaliknya, posisi yang
+    // kebetulan sering jadi awal kata di TENGAH sel (misalnya kata kedua nama
+    // toko) akan banyak dilewati teks baris lain. Jadi titik yang sering
+    // dilintasi dibuang, dan nama toko tidak lagi terpotong jadi beberapa kolom.
+    for (const k of kandidat) {
+      let lintas = 0;
+      for (const b of semuaBaris) {
+        for (const c of b.sel) {
+          if (c.x < k.awal - 1 && c.x + c.lebar > k.awal + 1) { lintas++; break; }
+        }
+      }
+      k.lintas = lintas;
+    }
+    // Ambangnya diukur terhadap SELURUH baris, bukan terhadap jumlah baris
+    // pendukung titik itu. Kalau tidak, kolom yang jarang terisi — Salesman dan
+    // Tanggal hanya ditulis di baris pertama tiap grup — ikut terbuang gara-gara
+    // dilintasi baris preamble yang membentang selebar halaman. Padahal kolom
+    // Tanggal itu yang dipakai menjodohkan dengan EDI.
+    const maxLintas = Math.max(2, Math.floor(semuaBaris.length * 0.15));
+    let lolos = kandidat.filter((k) => k.lintas <= maxLintas);
+    if (lolos.length < 3) lolos = kandidat.length ? kandidat : klaster;
+
+    // Satu kolom bisa punya dua posisi awal: judulnya rata tengah sementara
+    // isinya rata kiri, atau nilai pendek ("-") diletakkan berbeda dari nilai
+    // panjang. Yang membedakan "dua posisi untuk satu kolom" dari "dua kolom
+    // yang memang bersebelahan" bukan jaraknya, melainkan apakah keduanya pernah
+    // muncul BERSAMAAN di satu baris. "No." dan "No Outlet" selalu bersama di
+    // tiap baris data, jadi tetap terpisah. Judul "Alasan" dan isinya tidak
+    // pernah sebaris, jadi digabung.
+    const titik = [];
+    const grupSemua = [];
+    let grup = null;
+    for (const k of lolos) {
+      if (grup) {
+        let bareng = 0;
+        for (const bi of k.baris) if (grup.baris.has(bi)) bareng++;
+        const kecil = Math.min(grup.baris.size, k.baris.size);
+        if (bareng <= Math.max(1, kecil * 0.05)) {
+          for (const bi of k.baris) grup.baris.add(bi);
+          continue;                      // posisi lain untuk kolom yang sama
+        }
+      }
+      grup = { awal: k.awal, baris: new Set(k.baris) };
+      grupSemua.push(grup);
+    }
+    // Baru sekarang buang kolom yang benar-benar jarang dipakai (sisa preamble).
+    let titikGrup = grupSemua.filter((g) => g.baris.size >= minBaris);
+    if (titikGrup.length < 3) titikGrup = grupSemua;
+    for (const g of titikGrup) titik.push(g.awal);
 
     // Pemetaan akhir memakai potongan ASLI, bukan sel hasil langkah 2. Sebabnya
     // baris header dicetak tebal sehingga hampir memenuhi selnya — jaraknya jadi
@@ -611,9 +690,12 @@
     // tepercaya karena diambil dari ratusan baris data. Tiap potongan diberikan
     // ke titik kolom terdekat DI SEBELAH KIRI, supaya pecahan di tengah sel
     // tetap kembali ke kolomnya.
+    // Tiap potongan diberikan ke titik kolom terdekat DI SEBELAH KIRI. Nilai yang
+    // rata kanan (misalnya Faktur "-") tetap jatuh di kolomnya sendiri, tidak
+    // melompat ke kolom berikutnya.
     const kolomDari = (x) => {
       let i = 0;
-      while (i + 1 < titik.length && titik[i + 1] <= x + tolKolom * 0.5) i++;
+      while (i + 1 < titik.length && titik[i + 1] <= x + tolKolom) i++;
       return i;
     };
 
