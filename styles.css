@@ -423,3 +423,12 @@ tr.row-nil td { background: #fffbfb; }
   color: #6b4708; font-size: 12.5px; line-height: 1.55;
 }
 .warnbox b { color: var(--warn); }
+
+/* Alasan yang dipinjam dari tanggal lain — sengaja dibedakan supaya tidak
+   dikira bukti pada tanggal kunjungan itu. */
+.pinjam {
+  display: inline-block; margin-left: 4px; padding: 1px 5px;
+  background: var(--info-bg); color: var(--info);
+  border-radius: 3px; font-size: 10.5px; white-space: nowrap;
+}
+.pinjam::before { content: "↩ "; }

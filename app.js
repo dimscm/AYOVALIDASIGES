@@ -241,6 +241,15 @@
     const a = alasanHht(r);
     if (a) return escapeHtml(a);
     if (r.hht) return '<span class="nil">tidak dicatat di HHT</span>';
+    // Tidak ada baris HHT di tanggal kunjungan ini, tapi outlet yang sama punya
+    // alasan di tanggal lain. Ditampilkan sebagai petunjuk, dengan tanggal
+    // asalnya, supaya tidak dikira bukti hari itu.
+    if (r.alasanLuar) {
+      const t = r.alasanLuar.tgl;
+      return escapeHtml(r.alasanLuar.alasan)
+        + ` <span class="pinjam" title="Dari catatan HHT outlet ini di tanggal lain, bukan tanggal kunjungan ini">`
+        + `${t ? escapeHtml(t) : "tanggal lain"}</span>`;
+    }
     if (r.hhtNote === "beda-tanggal") return '<span class="nil">tanggal ini tidak ada di HHT</span>';
     return '<span class="nil">outlet tidak ada di HHT</span>';
   }
@@ -655,6 +664,7 @@
       let hhtTglTerbaca = 0;
       const hhtTanggalSet = new Set();
       state.scanByOutlet = new Map();
+      state.alasanByOutlet = new Map();
       if (state.hhtFile) {
         setStatus("Membaca HHT...");
         const hhtAoa = await readWorkbook(state.hhtFile);
@@ -674,6 +684,13 @@
             hhtTanggalSet.add(t);
           }
           if (!state.scanByOutlet.has(k) || isScanned(h)) state.scanByOutlet.set(k, h);
+          // Indeks terpisah untuk kolom Alasan: yang dicari baris yang PUNYA
+          // alasan nyata, bukan yang discan. Dipakai kalau tanggalnya tidak
+          // ketemu — alasan boleh dipinjam antar hari, status scan tidak.
+          const al = String(h.alasan || "").trim();
+          if (al && al !== "-" && al !== "—" && !state.alasanByOutlet.has(k)) {
+            state.alasanByOutlet.set(k, { alasan: al, tgl: String(h.tanggal || "").trim() });
+          }
         }
       }
       // Kalau kolom TANGGAL di HHT tidak terbaca sama sekali, jangan bikin semua
@@ -701,7 +718,10 @@
         const alamatEff = (dmp && dmp.alamat) || r.alamatToko || "";
         const rayonEff = (dmp && dmp.rayon) || r.team || "";
         const cycleEff = (dmp && dmp.cycle) || r.cycle || "";
-        return { ...r, hht, hhtNote, dmp, category: cat, namaTokoEff, salesmanEff, alamatEff, rayonEff, cycleEff };
+        // Alasan boleh dipinjam dari tanggal lain (ditandai di tabel). Status scan
+        // dan kategori TIDAK — itu bukti kunjungan hari itu, tidak boleh dipinjam.
+        const alasanLuar = hht ? null : (state.alasanByOutlet.get(r.custno) || null);
+        return { ...r, hht, hhtNote, alasanLuar, dmp, category: cat, namaTokoEff, salesmanEff, alamatEff, rayonEff, cycleEff };
       });
 
       // Consistency per outlet: bandingkan semua kunjungan outlet yang sama.
@@ -757,11 +777,16 @@
             const v = rapi(set);
             return v.length === 1 ? v[0] : `${v[0]} s/d ${v[v.length - 1]}`;
           };
+          const dipinjam = results.filter((r) => r.alasanLuar).length;
           state.periodeWarn =
             `Tanggal di EDI (${rentang(ediTgl)}) dan di HHT (${rentang(hhtTanggalSet)}) `
-            + `tidak ada yang sama. Karena itu kolom Scan dan Alasan Tidak Scan kosong: `
-            + `HHT tidak punya catatan untuk hari-hari tersebut. Upload HHT periode yang sama `
-            + `dengan EDI supaya kategorinya benar.`;
+            + `tidak ada yang sama. Kolom Scan dan kategori sengaja tetap kosong: status scan `
+            + `adalah bukti kunjungan pada hari itu, tidak boleh diambil dari hari lain. `
+            + (dipinjam
+                ? `Kolom Alasan tetap diisi dari catatan HHT outlet yang sama di tanggal lain `
+                  + `(${dipinjam.toLocaleString("id-ID")} baris, ditandai tanggal asalnya) sebagai petunjuk. `
+                : "")
+            + `Untuk kategori yang benar, upload HHT periode yang sama dengan EDI.`;
         } else {
           state.periodeWarn = "";
         }
@@ -828,7 +853,8 @@
       if (onlyMixed && r.consistency !== "MIXED") return false;
       if (sms.size > 0 && !sms.has(r.salesmanEff)) return false;
       if (q) {
-        const hay = [r.custno, r.namaTokoEff, r.salesmanEff, r.rayonEff, r.alamatEff, r.alorReason, alasanHht(r)]
+        const hay = [r.custno, r.namaTokoEff, r.salesmanEff, r.rayonEff, r.alamatEff, r.alorReason,
+                     alasanHht(r), r.alasanLuar && r.alasanLuar.alasan]
           .map((x) => String(x || "").toLowerCase()).join(" ");
         if (!hay.includes(q)) return false;
       }
@@ -1040,7 +1066,8 @@
         "Long Val": r.longVal ?? "",
         HHT: r.hht ? (r.hht.hht || "") : "",
         "Tipe Scan": r.hht ? (r.hht.tipeScan || "") : "",
-        "Alasan HHT": alasanHht(r),
+        "Alasan HHT": alasanHht(r) || (r.alasanLuar ? r.alasanLuar.alasan : ""),
+        "Alasan Dari Tanggal": alasanHht(r) ? "" : (r.alasanLuar ? (r.alasanLuar.tgl || "tanggal lain") : ""),
         "Alor Reason": r.alorReason || "",
         Saran: info.suggest,
       };
