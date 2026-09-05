@@ -435,3 +435,7 @@ tr.row-nil td { background: #fffbfb; }
 
 /* Keterangan format file yang diterima, di bawah nama file. */
 .fhint { display: block; font-size: 10.5px; color: var(--muted); margin-top: 1px; }
+
+/* Petunjuk kecil di kartu upload — dibedakan supaya tidak menyaingi teks utama. */
+.up-hint.tip { margin-top: 4px; color: var(--warn); }
+.up-hint.tip b { color: inherit; }
