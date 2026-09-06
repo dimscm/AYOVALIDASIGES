@@ -463,17 +463,18 @@
         const tone = pct >= 60 ? "cov-hi" : pct >= 25 ? "cov-mid" : "cov-lo";
         return `<tr>
           <td><b>${window.M3.escapeHtml(g.group)}</b></td>
-          <td class="mono" title="${window.M3.escapeHtml([...g.pcodes].join(", "))}">${g.pcodes.size}</td>
-          <td class="mono">${fmtInt(beli)}</td>
-          <td class="mono">${fmtInt(belum)}</td>
+          <td class="mono num" title="${window.M3.escapeHtml([...g.pcodes].join(", "))}">${g.pcodes.size}</td>
+          <td class="mono num">${fmtInt(beli)}</td>
+          <td class="mono num">${fmtInt(belum)}</td>
           <td><span class="cov ${tone}">${pct.toFixed(1)}%</span>
               <span class="covbar"><i style="width:${pct.toFixed(1)}%"></i></span></td>
-          <td class="mono">${fmtKar(g.karton)}</td>
-          <td class="mono">${fmtInt(g.pcs)}</td>
-          <td class="mono">${fmtInt(g.amount)}</td>
+          <td class="mono num">${fmtKar(g.karton)}</td>
+          <td class="mono num">${fmtInt(g.pcs)}</td>
+          <td class="mono num">${fmtInt(g.amount)}</td>
         </tr>`;
       }).join("");
     }
+    window.M3.stampLabels(document.getElementById("d2CoverageTable"));
     $("d2CoverageCount").textContent = `${rows.length} grup · ${fmtInt(total)} outlet`;
   }
 
@@ -532,12 +533,13 @@
           <td>${window.M3.escapeHtml(o.salesman)}</td>
           <td class="mono">${window.M3.escapeHtml(o.rayon)}</td>
           <td>${miss}</td>
-          <td class="mono">${o.groups.size}</td>
-          <td class="mono">${fmtKar(o.karton)}</td>
-          <td class="mono">${fmtInt(o.amount)}</td>
+          <td class="mono num">${o.groups.size}</td>
+          <td class="mono num">${fmtKar(o.karton)}</td>
+          <td class="mono num">${fmtInt(o.amount)}</td>
         </tr>`;
       }).join("");
     }
+    window.M3.stampLabels(document.getElementById("d2GapTable"));
     $("d2GapCount").textContent = `${fmtInt(rows.length)} outlet`;
     $("d2PageInfo").textContent = `Halaman ${S.gapPage} / ${pages}`;
     $("d2PrevPage").disabled = S.gapPage <= 1;

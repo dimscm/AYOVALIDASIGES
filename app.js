@@ -1103,27 +1103,35 @@
             return v.length === 1 ? v[0] : `${v[0]} s/d ${v[v.length - 1]}`;
           };
           const dipinjam = results.filter((r) => r.alasanLuar).length;
-          state.periodeWarn =
-            `Tanggal di EDI (${rentang(ediTgl)}) dan di HHT (${rentang(hhtTanggalSet)}) `
-            + `tidak ada yang sama. Kolom Scan dan kategori sengaja tetap kosong: status scan `
-            + `adalah bukti kunjungan pada hari itu, tidak boleh diambil dari hari lain. `
-            + (dipinjam
-                ? `Kolom Alasan tetap diisi dari catatan HHT outlet yang sama di tanggal lain `
-                  + `(${dipinjam.toLocaleString("id-ID")} baris, ditandai tanggal asalnya) sebagai petunjuk. `
-                : "")
-            + `Untuk kategori yang benar, upload HHT periode yang sama dengan EDI.`;
+          // Dipecah dua: satu kalimat yang langsung terlihat, sisanya disembunyikan
+          // di balik "Kenapa?". Versi panjangnya memakan 13 baris di layar HP dan
+          // mendorong ringkasan jauh ke bawah.
+          state.periodeWarn = {
+            ringkas: `Tanggal di EDI (${rentang(ediTgl)}) dan di HHT (${rentang(hhtTanggalSet)}) `
+              + `tidak ada yang sama. Upload HHT periode yang sama supaya kategorinya benar.`,
+            detail: `Kolom Scan dan kategori sengaja tetap kosong: status scan adalah bukti `
+              + `kunjungan pada hari itu, tidak boleh diambil dari hari lain. `
+              + (dipinjam
+                  ? `Kolom Alasan tetap diisi dari catatan HHT outlet yang sama di tanggal lain `
+                    + `(${dipinjam.toLocaleString("id-ID")} baris, ditandai tanggal asalnya) sebagai petunjuk.`
+                  : ""),
+          };
         } else {
           state.periodeWarn = "";
         }
       } else {
         msg.push("tanpa HHT — scan dianggap tidak ada");
-        state.periodeWarn = "";
+        state.periodeWarn = null;
       }
       const wb = $("d1Warn");
       if (wb) {
-        wb.innerHTML = state.periodeWarn
-          ? `<b>Periode EDI dan HHT tidak bertemu.</b> ${escapeHtml(state.periodeWarn)}` : "";
-        wb.classList.toggle("hidden", !state.periodeWarn);
+        const w = state.periodeWarn;
+        wb.innerHTML = w
+          ? `<b>Periode EDI dan HHT tidak bertemu.</b> ${escapeHtml(w.ringkas)}`
+            + (w.detail ? `<details class="warn-more"><summary>Kenapa?</summary>`
+                          + `<p>${escapeHtml(w.detail)}</p></details>` : "")
+          : "";
+        wb.classList.toggle("hidden", !w);
       }
 
       if (hhtWarn) msg.push(hhtWarn);
@@ -1156,7 +1164,10 @@
 
   function statCard(label, value, tone, sub) {
     const s = sub ? ` <small>${sub}</small>` : "";
-    return `<div class="stat ${tone || ""}"><b>${value}${s}</b><span>${escapeHtml(label)}</span></div>`;
+    // Kartu bernilai nol diredupkan supaya mata langsung tertuju ke kategori
+    // yang benar-benar ada isinya dan perlu ditindaklanjuti.
+    const nol = String(value).replace(/[^\d]/g, "") === "0" ? " zero" : "";
+    return `<div class="stat${nol} ${tone || ""}"><b>${value}${s}</b><span>${escapeHtml(label)}</span></div>`;
   }
 
   function getSelectedCategories() {
@@ -1225,23 +1236,27 @@
       const hhtCell = r.hht ? `${escapeHtml(String(r.hht.hht || ""))}${r.hht.tipeScan ? " / " + escapeHtml(String(r.hht.tipeScan)) : ""}` : "—";
       // Kalau baris ini outlet yang sama dengan baris sebelumnya (di halaman ini),
       // kosongkan kolom identitas outlet supaya visual seperti merged cell.
+      // Kunjungan berulang di outlet yang sama: identitasnya tetap ditulis, tapi
+      // di desktop disamarkan supaya terlihat seperti sel yang digabung. Di HP
+      // tiap baris berdiri sendiri sebagai kartu, jadi identitasnya dimunculkan
+      // lagi — kalau dikosongkan, kartunya jadi tidak jelas milik outlet mana.
       const dup = r.custno === prevCust;
       prevCust = r.custno;
-      const nomor = dup ? "" : escapeHtml(r.custno);
-      const nama = dup ? "" : escapeHtml(r.namaTokoEff);
-      const sls = dup ? "" : escapeHtml(r.salesmanEff);
-      const rayon = dup ? "" : escapeHtml(r.rayonEff);
-      const cycle = dup ? "" : escapeHtml(r.cycleEff);
-      const consTag = dup ? "" : `<span class="tag-cons cons-${r.consistency}" title="${escapeHtml(cons.hint)}">${escapeHtml(consLabel)}</span>`;
+      const nomor = escapeHtml(r.custno);
+      const nama = escapeHtml(r.namaTokoEff);
+      const sls = escapeHtml(r.salesmanEff);
+      const rayon = escapeHtml(r.rayonEff);
+      const cycle = escapeHtml(r.cycleEff);
+      const consTag = `<span class="tag-cons cons-${r.consistency}" title="${escapeHtml(cons.hint)}">${escapeHtml(consLabel)}</span>`;
       const dist = r.distance !== null && r.distance !== undefined ? Number(r.distance).toFixed(1) : "";
       return `<tr class="${dup ? "row-dup" : ""}">
         <td><span class="tag tag-${r.category}">${escapeHtml(info.label)}</span></td>
-        <td class="col-x">${consTag}</td>
-        <td class="mono">${nomor}</td>
-        <td>${nama}</td>
-        <td>${sls}</td>
-        <td class="col-x mono">${rayon}</td>
-        <td class="col-x">${cycle}</td>
+        <td class="col-x${dup ? " dupcell" : ""}">${consTag}</td>
+        <td class="mono${dup ? " dupcell" : ""}">${nomor}</td>
+        <td class="${dup ? "dupcell" : ""}">${nama}</td>
+        <td class="${dup ? "dupcell" : ""}">${sls}</td>
+        <td class="col-x mono${dup ? " dupcell" : ""}">${rayon}</td>
+        <td class="col-x${dup ? " dupcell" : ""}">${cycle}</td>
         <td class="mono">${escapeHtml(r.visitDate || "")}</td>
         <td class="col-x mono">${escapeHtml(r.jamin || "")}</td>
         <td class="col-x mono">${escapeHtml(r.jamout || "")}</td>
@@ -1258,10 +1273,27 @@
       tbody.innerHTML = `<tr><td colspan="16" class="empty">Tidak ada baris yang cocok dengan filter ini.</td></tr>`;
     }
 
+    stampLabels(document.getElementById("resultTable"));
     $("countInfo").textContent = `${total.toLocaleString("id-ID")} baris`;
     $("pageInfo").textContent = `Halaman ${state.page} / ${pages}`;
     $("prevPage").disabled = state.page <= 1;
     $("nextPage").disabled = state.page >= pages;
+  }
+
+  // Di layar HP, tabel diubah jadi kartu bertumpuk lewat CSS. Supaya tiap nilai
+  // tetap punya keterangan, judul kolomnya disalin ke atribut data-label di
+  // setiap sel — CSS menampilkannya lewat ::before. Dikerjakan di sini, sekali
+  // per render, supaya template barisnya tidak perlu mengulang nama kolom.
+  function stampLabels(table) {
+    if (!table) return;
+    const th = [...table.querySelectorAll("thead th")].map((h) => h.textContent.trim());
+    if (!th.length) return;
+    for (const tr of table.querySelectorAll("tbody tr")) {
+      const tds = tr.children;
+      for (let i = 0; i < tds.length; i++) {
+        if (th[i]) tds[i].setAttribute("data-label", th[i]);
+      }
+    }
   }
 
   function escapeHtml(s) {
@@ -1493,6 +1525,7 @@
     debounce,
     setStatus,
     placeMenu,
+    stampLabels,
     getDmpIndex: () => state.dmpIndex,
     getDmpBySalesman: () => state.dmpBySalesman || new Map(),
     getDmpStats: () => state.dmpStats || null,

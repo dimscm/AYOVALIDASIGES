@@ -439,3 +439,95 @@ tr.row-nil td { background: #fffbfb; }
 /* Petunjuk kecil di kartu upload — dibedakan supaya tidak menyaingi teks utama. */
 .up-hint.tip { margin-top: 4px; color: var(--warn); }
 .up-hint.tip b { color: inherit; }
+
+/* ============ Perapian tampilan (v25) ============ */
+
+/* Angka dirata-kanan supaya besar-kecilnya bisa dibandingkan sekilas —
+   digit rata kolom lewat tabular-nums. */
+th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Sel identitas outlet pada kunjungan berulang: disamarkan di desktop supaya
+   terlihat seperti sel yang digabung, tapi teksnya tetap ada di DOM sehingga
+   bisa dimunculkan lagi saat tampilan kartu di HP. */
+tr.row-dup .dupcell { visibility: hidden; }
+
+/* Kartu ringkasan yang nilainya nol tidak perlu menyita perhatian sebanyak
+   yang ada isinya. */
+.summary .stat.zero { opacity: .5; }
+.summary .stat.zero b, .summary .stat.zero small { color: var(--muted); }
+
+@media (max-width: 720px) {
+  /* ---- Tabel jadi kartu bertumpuk ----
+     Di layar HP tabel 16 kolom harus digeser 2,5x lebar layar. Diubah jadi satu
+     kartu per baris: judul kolom yang tadinya di atas dipindah ke tiap sel. */
+  .table-wrap { overflow-x: visible; border: 0; border-radius: 0; }
+  .table-wrap table, .table-wrap tbody, .table-wrap tr, .table-wrap td { display: block; width: 100%; }
+  .table-wrap thead { display: none; }
+  .table-wrap tr {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
+    margin-bottom: 10px; padding: 4px 2px; overflow: hidden;
+  }
+  .table-wrap tbody tr:hover td { background: transparent; }
+  .table-wrap td {
+    display: flex; gap: 10px; align-items: baseline; justify-content: space-between;
+    padding: 6px 12px; border-bottom: 0; text-align: left; font-size: 13px;
+  }
+  .table-wrap td::before {
+    content: attr(data-label);
+    flex: 0 0 34%; color: var(--muted); font-size: 10.5px; line-height: 1.35;
+    text-transform: uppercase; letter-spacing: .03em; font-weight: 600;
+  }
+  /* Kolom pertama jadi judul kartu — kategori di Dashboard 1, nama produk /
+     kode outlet di Dashboard 2. Lebih terbaca daripada sekadar baris label. */
+  .table-wrap td:first-child {
+    display: block; padding: 9px 12px; margin-bottom: 2px;
+    background: var(--line-2); border-bottom: 1px solid var(--line);
+    font-weight: 600; font-size: 13.5px;
+  }
+  .table-wrap td:first-child::before { content: none; }
+  /* Sel kosong tidak perlu memakan baris. */
+  .table-wrap td:empty { display: none; }
+  /* Identitas outlet dimunculkan lagi: tiap kartu harus jelas milik outlet mana. */
+  .table-wrap tr.row-dup .dupcell { visibility: visible; }
+  /* Kolom tambahan tetap mengikuti tombol "Detail lengkap". */
+  .table-wrap .col-x { display: none; }
+  body.full-cols .table-wrap .col-x { display: flex; }
+  /* Angka tetap rata kanan di dalam kartu. */
+  .table-wrap td.num { justify-content: space-between; }
+  /* Baris "tidak ada hasil" tidak perlu berlabel. */
+  .table-wrap td.empty { display: block; text-align: center; padding: 20px 12px; }
+  .table-wrap td.empty::before { content: none; }
+
+  /* ---- Area sentuh minimal 44px ---- */
+  .linkbtn { min-height: 44px; display: inline-flex; align-items: center; }
+  .ghost.sm { min-height: 44px; padding: 10px 16px; }
+  .pager button { min-height: 44px; min-width: 56px; }
+  .tab { min-height: 48px; }
+}
+
+/* Bagian panjang dari peringatan disembunyikan di balik "Kenapa?" supaya
+   ringkasan tidak terdorong jauh ke bawah, terutama di HP. */
+.warn-more { margin-top: 6px; }
+.warn-more > summary {
+  cursor: pointer; font-weight: 600; list-style: none;
+  display: inline-flex; align-items: center; min-height: 32px;
+}
+.warn-more > summary::-webkit-details-marker { display: none; }
+.warn-more > summary::before { content: "＋ "; }
+.warn-more[open] > summary::before { content: "－ "; }
+.warn-more p { margin: 4px 0 0; }
+
+@media (max-width: 720px) {
+  /* Sisa kontrol yang masih di bawah 44px: dropdown filter dan kotak centang. */
+  .multi-btn { min-height: 46px; }
+  .check-toggle { min-height: 46px; }
+  .help > summary { min-height: 44px; display: flex; align-items: center; }
+  .warn-more > summary { min-height: 44px; }
+}
+
+/* Kartu ringkasan dibagi rata sehingga tidak menyisakan satu kartu sendirian
+   di baris terakhir. */
+.summary { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+/* Angka utama tidak boleh terpotong ke baris baru — satuannya ("M", "jt")
+   harus tetap menempel supaya besarannya terbaca sekali lihat. */
+.stat b { white-space: nowrap; }
