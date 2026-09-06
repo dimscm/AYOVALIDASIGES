@@ -919,6 +919,9 @@
     const smAll = $("filterSalesmanAll"); if (smAll) smAll.checked = true;
     const smLabel = $("filterSalesmanLabel"); if (smLabel) smLabel.textContent = "Semua salesman";
     const sSearch = $("filterSalesmanSearch"); if (sSearch) sSearch.value = "";
+    document.querySelectorAll(".filterRayonItem").forEach((c) => (c.checked = false));
+    const ryAll = $("filterRayonAll"); if (ryAll) ryAll.checked = true;
+    const ryLabel = $("filterRayonLabel"); if (ryLabel) ryLabel.textContent = "Semua rayon";
     $("search").value = "";
     const inkon = $("filterInkonsisten"); if (inkon) inkon.checked = false;
     setStatus("");
@@ -1027,7 +1030,10 @@
         const namaTokoEff = (dmp && dmp.namaOutlet) || (hht && hht.namaToko && String(hht.namaToko).trim()) || r.namaToko || "";
         const salesmanEff = (dmp && dmp.salesman) || (hht && hht.salesman && String(hht.salesman).trim()) || r.slsname || "";
         const alamatEff = (dmp && dmp.alamat) || r.alamatToko || "";
-        const rayonEff = (dmp && dmp.rayon) || r.team || "";
+        // Rayon diambil dari DMP. Kalau outletnya tidak ada di DMP, yang tersedia
+        // hanya kolom TEAM di EDI — isinya nama tim ("288 - COF+HF+IF+HC"), bukan
+        // rayon. Ditandai supaya tidak disangka rayon saat difilter.
+        const rayonEff = (dmp && dmp.rayon) || (r.team ? `${String(r.team).trim()} (TEAM)` : "");
         const cycleEff = (dmp && dmp.cycle) || r.cycle || "";
         // Alasan boleh dipinjam dari tanggal lain (ditandai di tabel). Status scan
         // dan kategori TIDAK — itu bukti kunjungan hari itu, tidak boleh dipinjam.
@@ -1058,6 +1064,14 @@
 
       const salesmen = [...new Set(results.map((r) => r.salesmanEff).filter(Boolean))].sort();
       populateSalesmen(salesmen);
+      // Rayon asli dari DMP didahulukan; nilai cadangan dari TEAM ditaruh
+      // paling bawah supaya tidak mengaburkan daftar rayon yang sebenarnya.
+      const rayons = [...new Set(results.map((r) => r.rayonEff).filter(Boolean))]
+        .sort((a, b) => {
+          const ta = a.endsWith("(TEAM)") ? 1 : 0, tb = b.endsWith("(TEAM)") ? 1 : 0;
+          return ta - tb || a.localeCompare(b, "id", { numeric: true });
+        });
+      populateRayon(rayons);
       applyFilters();
       $("resultSection").classList.remove("hidden");
       const msg = [`${results.length.toLocaleString("id-ID")} kunjungan`];
@@ -1154,15 +1168,22 @@
       .filter((c) => c.checked).map((c) => c.value));
   }
 
+  function getSelectedRayon() {
+    return new Set([...document.querySelectorAll(".filterRayonItem")]
+      .filter((c) => c.checked).map((c) => c.value));
+  }
+
   // Base set for the summary: salesman + search + inkonsisten toggle, but NOT category.
   // (Summary is the category breakdown itself.)
   function getBaseFiltered() {
     const q = $("search").value.trim().toLowerCase();
     const sms = getSelectedSalesmen();
+    const rys = getSelectedRayon();
     const onlyMixed = $("filterInkonsisten") && $("filterInkonsisten").checked;
     return state.results.filter((r) => {
       if (onlyMixed && r.consistency !== "MIXED") return false;
       if (sms.size > 0 && !sms.has(r.salesmanEff)) return false;
+      if (rys.size > 0 && !rys.has(r.rayonEff)) return false;
       if (q) {
         const hay = [r.custno, r.namaTokoEff, r.salesmanEff, r.rayonEff, r.alamatEff, r.alorReason,
                      alasanHht(r), r.alasanLuar && r.alasanLuar.alasan]
@@ -1328,6 +1349,21 @@
 
   const smCtrl = wireMulti("filterSalesman", "filterSalesmanBtn", "filterSalesmanMenu",
     "filterSalesmanAll", "filterSalesmanItem", "filterSalesmanLabel", "salesman");
+
+  const ryCtrl = wireMulti("filterRayon", "filterRayonBtn", "filterRayonMenu",
+    "filterRayonAll", "filterRayonItem", "filterRayonLabel", "rayon");
+
+  function populateRayon(names) {
+    const list = $("filterRayonList");
+    list.innerHTML = names.map((n) => {
+      const safe = escapeHtml(n);
+      return `<label class="multi-opt"><input type="checkbox" value="${safe}" class="filterRayonItem" /> ${safe}</label>`;
+    }).join("");
+    list.querySelectorAll(".filterRayonItem").forEach((c) => {
+      c.addEventListener("change", () => { ryCtrl.updateLabel(); applyFilters(); });
+    });
+    ryCtrl.updateLabel();
+  }
 
   function populateSalesmen(names) {
     const list = $("filterSalesmanList");
