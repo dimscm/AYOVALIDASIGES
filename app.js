@@ -1589,13 +1589,22 @@
     "Nama Toko", "Salesman", "Rayon (Team)", "Cycle", "Alamat Toko", "Visit Date",
     "Jam Masuk", "Jam Keluar", "Flag Radius", "Distance", "Lat Visit", "Long Visit",
     "Lat Val", "Long Val", "HHT", "Tipe Scan", "Alasan HHT", "Alasan Dari Tanggal",
-    "Alor Reason", "Saran", "Titik Toko", "Keyakinan Usulan"];
+    "Alor Reason", "Saran", "Titik Toko", "Lat Usulan", "Long Usulan", "Keyakinan Usulan"];
 
   const TITIK_TEKS = {
+    USUL: "Perlu diperbaiki",
+    KEMBALI: "Kembalikan titik lama",
     TANYA: "Kunjungan berpencar — tanya salesman",
     PAS: "Sudah benar",
     SATU: "Baru 1 kunjungan bermasalah",
   };
+
+  // Koordinat ditulis sebagai teks bertitik, bukan angka. Excel berbahasa
+  // Indonesia menampilkan angka desimal dengan koma (-6,183851), dan angka
+  // seperti itu salah begitu ditempel ke sistem yang menunggu titik. Kolom
+  // LAT VAL di EDI sendiri juga berupa teks bertitik, jadi ini sekalian
+  // menyamakan bentuknya.
+  const koordTeks = (v) => (v === null || v === undefined ? "" : Number(v).toFixed(6));
 
   // Baris ditulis sebagai array, bukan objek. Satu objek berisi 26 nama kolom
   // dikali ratusan ribu baris menghabiskan memori sendiri sebelum filenya
@@ -1604,11 +1613,13 @@
     const info = CATEGORY_INFO[r.category];
     const cons = CONSISTENCY_INFO[r.consistency] || CONSISTENCY_INFO.SINGLE;
     const u = state.titikByOutlet && state.titikByOutlet.get(r.custno);
+    // Keterangannya di satu kolom, koordinatnya di kolom sendiri-sendiri —
+    // supaya angkanya tinggal disalin ke master, tidak perlu dipotong dulu
+    // dari tengah kalimat.
     const titik = !u ? ""
-      : u.bucket === "USUL" ? `Perlu diperbaiki: ${u.mLat.toFixed(6)}, ${u.mLon.toFixed(6)}`
-      : u.bucket === "KEMBALI" ? `Kembalikan titik lama: ${u.mLat.toFixed(6)}, ${u.mLon.toFixed(6)}`
       : u.bucket === "PAS" && u.sebab === "diperbaiki" ? "Sudah diperbaiki setelah tanggal ini"
       : TITIK_TEKS[u.bucket] || "";
+    const adaUsulan = u && (u.bucket === "USUL" || u.bucket === "KEMBALI");
     return [
       info.label, cons.label, r.visitCount, r.custno, r.namaTokoEff, r.salesmanEff,
       r.rayonEff, r.cycleEff, r.alamatEff, r.visitDate || "", r.jamin || "", r.jamout || "",
@@ -1618,7 +1629,8 @@
       alasanHht(r) || (r.alasanLuar ? r.alasanLuar.alasan : ""),
       alasanHht(r) ? "" : (r.alasanLuar ? (r.alasanLuar.tgl || "tanggal lain") : ""),
       r.alorReason || "", info.suggest, titik,
-      u && (u.bucket === "USUL" || u.bucket === "KEMBALI") ? u.yakin : "",
+      adaUsulan ? koordTeks(u.mLat) : "", adaUsulan ? koordTeks(u.mLon) : "",
+      adaUsulan ? u.yakin : "",
     ];
   }
 
@@ -2136,11 +2148,11 @@
         ? `Koordinat ini menghasilkan FLAG 1 pada ${tglTampil(u.tglLolos)}`
         : `${u.rapat} dari ${u.n} kunjungan mengumpul di titik ini`,
       "Sebaran (m)": u.sebar === undefined ? "" : u.sebar,
-      "Lat Sekarang": u.belumTag ? "" : u.curLa,
-      "Long Sekarang": u.belumTag ? "" : u.curLo,
+      "Lat Sekarang": u.belumTag ? "" : koordTeks(u.curLa),
+      "Long Sekarang": u.belumTag ? "" : koordTeks(u.curLo),
       "Status Titik Sekarang": u.belumTag ? "Belum di-tag" : "Ada",
-      "Lat Usulan": Number(u.mLat.toFixed(6)),
-      "Long Usulan": Number(u.mLon.toFixed(6)),
+      "Lat Usulan": koordTeks(u.mLat),
+      "Long Usulan": koordTeks(u.mLon),
       "Geser (m)": u.geser === null || u.geser === undefined ? "" : u.geser,
       Keyakinan: u.yakin,
       "Salesman Berbeda": u.salesmanBeda,
