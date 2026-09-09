@@ -286,8 +286,13 @@ body.full-cols .col-x { display: table-cell; }
 .yakin-Sedang { background: var(--info-bg); color: var(--info); }
 .yakin-Rendah { background: var(--warn-bg); color: var(--warn); }
 
-/* Usulan titik outlet */
-.sechint { margin: -2px 0 12px; font-size: 12.5px; color: var(--muted); max-width: 68ch; }
+/* Kolom "Titik Toko" di tabel Detail */
+/* Usulan ditulis sekali per outlet, jadi selnya dibiarkan benar-benar kosong
+   pada baris kunjungan berikutnya — bukan disembunyikan, supaya barisnya tidak
+   ikut setinggi sel usulan yang tidak terlihat. */
+.titik { min-width: 170px; }
+.titik-aksi { font-size: 12px; color: var(--warn); font-weight: 600; }
+.titik-sub { display: block; margin-top: 2px; font-size: 11px; color: var(--muted); line-height: 1.5; }
 .maplink { color: var(--info); text-decoration: none; border-bottom: 1px dotted currentColor; }
 .maplink:hover { border-bottom-style: solid; }
 .kuat {
@@ -509,6 +514,16 @@ tr.row-dup .dupcell { visibility: hidden; }
   body.full-cols .table-wrap .col-x { display: flex; }
   /* Angka tetap rata kanan di dalam kartu. */
   .table-wrap td.num { justify-content: space-between; }
+  /* Kolom "Titik Toko" isinya beberapa baris. Kalau dipaksa berdampingan dengan
+     labelnya, sisa lebarnya cuma sepertiga layar dan tiap kata patah sendiri.
+     Di kartu, labelnya ditaruh di atas dan isinya memakai lebar penuh. */
+  .table-wrap td.titik { display: block; }
+  .table-wrap td.titik::before { display: block; flex: none; margin-bottom: 3px; }
+  .table-wrap td.titik .titik-sub { margin-top: 2px; }
+  /* Aturan td:empty di atas kalah spesifik dari .titik, jadi disebut lagi —
+     kalau tidak, kartu kunjungan berulang menyisakan label tanpa isi. */
+  .table-wrap td.titik:empty { display: none; }
+
   /* Baris "tidak ada hasil" tidak perlu berlabel. */
   .table-wrap td.empty { display: block; text-align: center; padding: 20px 12px; }
   .table-wrap td.empty::before { content: none; }
