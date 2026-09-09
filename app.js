@@ -1708,6 +1708,29 @@
     return usulan;
   }
 
+  // Sel hyperlink di xlsx: teksnya yang terbaca, alamatnya di properti "l".
+  // Alamat lengkap tidak ditulis sebagai isi sel supaya kolomnya tidak melebar
+  // dan yang dibaca orang tetap "Buka peta" / "Lihat toko".
+  function sheetUsulan(usulan) {
+    const bersih = usulan.map((u) => {
+      const { _pin, _pano, ...sisa } = u;
+      return sisa;
+    });
+    const ws = XLSX.utils.json_to_sheet(bersih);
+    const kepala = XLSX.utils.sheet_to_json(ws, { header: 1 })[0] || [];
+    const kolPin = kepala.indexOf("Buka Peta"), kolPano = kepala.indexOf("Lihat Toko");
+    for (let i = 0; i < usulan.length; i++) {
+      const pasang = (kol, url, judul) => {
+        if (kol < 0 || !url) return;
+        const sel = ws[XLSX.utils.encode_cell({ r: i + 1, c: kol })];
+        if (sel) sel.l = { Target: url, Tooltip: judul };
+      };
+      pasang(kolPin, usulan[i]._pin, "Buka titik usulan di Google Maps");
+      pasang(kolPano, usulan[i]._pano, "Street View — lihat muka tokonya");
+    }
+    return ws;
+  }
+
   $("exportBtn").addEventListener("click", async () => {
     if (!state.filtered.length) return;
     const btn = $("exportBtn");
@@ -1739,7 +1762,7 @@
         XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), "Hasil");
         const usulan = daftarUsulan();
         if (usulan.length)
-          XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(usulan), "Usulan Titik");
+          XLSX.utils.book_append_sheet(wb, sheetUsulan(usulan), "Usulan Titik");
         // Lewat unduh(), bukan XLSX.writeFile: writeFile membuat tautan
         // unduhannya sendiri, dan tautan itu mati di dalam artifact.
         const buf = XLSX.write(wb, { type: "array", bookType: "xlsx" });
@@ -1878,10 +1901,18 @@
       : `${Math.round(m).toLocaleString("id-ID")} m`;
   }
 
+  // Dua cara melihat satu titik. Pin peta selalu ada; Street View menampilkan
+  // muka tokonya, tapi hanya kalau jalannya pernah difoto — kalau tidak,
+  // Google jatuh kembali ke peta biasa.
+  const petaPin = (la, lo) =>
+    `https://www.google.com/maps/search/?api=1&query=${la.toFixed(6)},${lo.toFixed(6)}`;
+  const petaToko = (la, lo) =>
+    `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${la.toFixed(6)},${lo.toFixed(6)}`;
+
   function petaLink(la, lo, teks) {
-    const q = `${la.toFixed(6)},${lo.toFixed(6)}`;
-    return `<a class="maplink" href="https://www.google.com/maps?q=${q}" `
-      + `target="_blank" rel="noopener">${teks}</a>`;
+    return `<a class="maplink" href="${petaPin(la, lo)}" target="_blank" rel="noopener">${teks}</a>`
+      + ` &middot; <a class="maplink" href="${petaToko(la, lo)}" target="_blank" rel="noopener"`
+      + ` title="Street View — lihat muka tokonya, kalau jalannya pernah difoto">lihat toko</a>`;
   }
 
   // Rentang tanggal yang sedang dipakai menilai titik. Kunjungan lama sering
@@ -2157,7 +2188,10 @@
       Keyakinan: u.yakin,
       "Salesman Berbeda": u.salesmanBeda,
       "Kunjungan Jadi IN RADIUS": u.bisaLolos === undefined ? "" : u.bisaLolos,
-      "Link Peta": `https://www.google.com/maps?q=${u.mLat.toFixed(6)},${u.mLon.toFixed(6)}`,
+      "Buka Peta": "Buka peta",
+      "Lihat Toko": "Lihat toko",
+      _pin: petaPin(u.mLat, u.mLon),
+      _pano: petaToko(u.mLat, u.mLon),
     };
   }
 
