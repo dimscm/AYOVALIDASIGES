@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>M3 Beverage Mayora</title>
-  <link rel="stylesheet" href="styles.css?v=25" />
+  <link rel="stylesheet" href="styles.css?v=26" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23c8102e'/%3E%3Ctext x='50' y='62' font-size='34' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EM3%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -210,6 +210,76 @@
           <button id="nextPage" class="ghost">&rarr;</button>
         </div>
       </section>
+
+      <section class="card hidden" id="titikSection">
+        <div class="sec-head">
+          <h2>Usulan Perbaikan Titik Outlet</h2>
+          <button class="linkbtn" id="helpTitikBtn">Cara membacanya</button>
+        </div>
+        <p class="sechint">Outlet yang kunjungannya selalu jatuh di tempat yang sama,
+          tapi jauh dari titik validasi di master. Titik usulan dihitung dari sebaran
+          kunjungan itu sendiri.</p>
+        <div class="summary" id="titikSummary"></div>
+
+        <details class="help" id="helpTitik">
+          <summary>Cara membaca usulan ini</summary>
+          <div class="help-body">
+            <p class="hnote"><b>Ini usulan, bukan koreksi otomatis.</b> Kunjungan yang
+              mengumpul rapat membuktikan <i>konsistensi</i>, bukan <i>kebenaran</i> —
+              salesman yang selalu absen dari warung yang sama akan terlihat persis
+              seperti ini. Periksa dulu lewat link peta dan alamat DMP sebelum titiknya
+              diganti di master.</p>
+            <div class="hgrid">
+              <div class="h-item ok"><b>Keyakinan Tinggi</b><span>Semua kunjungan jatuh di titik usulan, dikuatkan banyak hari atau lebih dari satu salesman.</span></div>
+              <div class="h-item info"><b>Keyakinan Sedang</b><span>Semua kunjungan jatuh di titik usulan, tapi buktinya masih sedikit.</span></div>
+              <div class="h-item warn"><b>Keyakinan Rendah</b><span>Mayoritas mengumpul, sebagian kunjungan menyimpang. Periksa lebih teliti.</span></div>
+              <div class="h-item bad"><b>Kunjungan berpencar</b><span>Titik kunjungan tidak berkumpul di mana pun. Titik master tidak bisa ditebak — tanyakan ke salesman.</span></div>
+            </div>
+            <p class="hnote"><b>Kunjungan dipakai</b> = berapa kunjungan yang akan masuk
+              radius kalau titik usulan dipakai, dari total kunjungan outlet itu.
+              <b>Sebaran</b> = jarak terjauh kunjungan tersebut dari titik usulan.
+              <b>Geser</b> = jarak titik master sekarang ke titik usulan.
+              <span class="kuat">2+ SLS</span> berarti outlet ini dikunjungi lebih dari
+              satu salesman di tempat yang sama — bukti yang jauh lebih kuat.</p>
+            <p class="hnote">Makin banyak periode yang di-upload, makin banyak outlet
+              yang bisa dinilai. Outlet yang baru punya 1 kunjungan belum bisa
+              disimpulkan karena tidak ada pembandingnya.</p>
+            <p class="hnote">Bagian ini menghitung semua outlet, tidak ikut filter
+              salesman/rayon di tabel Detail di atas — supaya bukti dari salesman lain
+              di outlet yang sama tidak hilang.</p>
+          </div>
+        </details>
+
+        <div class="toolbar">
+          <input type="search" id="titikSearch" placeholder="Cari outlet, salesman, alamat..." />
+          <select id="titikMode">
+            <option value="USUL">Bisa diusulkan titiknya</option>
+            <option value="TANYA">Kunjungan berpencar — tanya salesman</option>
+          </select>
+          <span id="titikCount" class="count"></span>
+          <button id="titikExport" class="ghost">Export Excel</button>
+        </div>
+        <div class="table-wrap">
+          <table id="titikTable">
+            <thead>
+              <tr>
+                <th>Kode Outlet</th>
+                <th>Nama Toko</th>
+                <th>Salesman</th>
+                <th class="col-x">Rayon</th>
+                <th class="num">Kunjungan Dipakai</th>
+                <th class="num">Sebaran</th>
+                <th>Titik Sekarang</th>
+                <th>Titik Usulan</th>
+                <th class="num">Geser</th>
+                <th>Keyakinan</th>
+                <th class="col-x">Alamat</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
     </div>
 
     <!-- ===== Dashboard 2 ===== -->
@@ -343,13 +413,13 @@
       </section>
     </div>
 
-    <p class="credit">dimscm &middot; v25</p>
+    <p class="credit">dimscm &middot; v26</p>
   </main>
 
   <script src="vendor/xlsx.full.min.js"></script>
   <script src="vendor/jszip.min.js"></script>
   <script src="vendor/7zz.umd.js"></script>
-  <script src="app.js?v=25"></script>
-  <script src="dash2.js?v=25"></script>
+  <script src="app.js?v=26"></script>
+  <script src="dash2.js?v=26"></script>
 </body>
 </html>

@@ -7,6 +7,7 @@
     dmpIndex: new Map(),
     results: [],
     filtered: [],
+    titik: { usul: [], tanya: [], kurang: 0, sudahPas: 0, dampak: 0 },
     page: 1,
     pageSize: 100,
   };
@@ -44,6 +45,7 @@
     docid:       ["DOCID"],
     flagRadius:  ["FLAG RADIUS", "FLAG"],
     distance:    ["DISTANCE"],
+    setting:     ["SETTING", "RADIUS"],
     latVisit:    ["LAT VISIT"],
     longVisit:   ["LONG VISIT"],
     latVal:      ["LAT VAL"],
@@ -111,6 +113,7 @@
         docid: row[idx.docid],
         flagRadius: normalizeFlag(row[idx.flagRadius]),
         distance: row[idx.distance],
+        setting: row[idx.setting],
         latVisit: row[idx.latVisit],
         longVisit: row[idx.longVisit],
         latVal: row[idx.latVal],
@@ -908,7 +911,13 @@
     $("dmpName").textContent = "Belum dipilih"; $("lbpName").textContent = "Belum dipilih";
     ["rowEdi", "rowHht", "rowDmp", "rowLbp"].forEach((id) => $(id).classList.remove("has"));
     if (window.M3D2) window.M3D2.reset();
+    state.titik = { usul: [], tanya: [], kurang: 0, sudahPas: 0, dampak: 0 };
     $("resultSection").classList.add("hidden");
+    if ($("titikSection")) {
+      $("titikSection").classList.add("hidden");
+      $("titikSearch").value = "";
+      $("titikMode").value = "USUL";
+    }
     $("uploadCard").classList.remove("hidden");
     $("loadedBar").classList.add("hidden");
     $("tabs").classList.add("hidden");
@@ -1061,6 +1070,7 @@
         for (const v of visits) { v.consistency = key; v.visitCount = visits.length; }
       }
       state.results = results;
+      hitungTitik();
 
       const salesmen = [...new Set(results.map((r) => r.salesmanEff).filter(Boolean))].sort();
       populateSalesmen(salesmen);
@@ -1491,6 +1501,7 @@
     });
   };
   openHelp("helpD1Btn", "helpD1");
+  openHelp("helpTitikBtn", "helpTitik");
   openHelp("helpD2Btn", "helpD2");
 
   // Setelah diproses, panel upload mengkerut jadi strip ringkas.
@@ -1512,6 +1523,265 @@
     $("uploadCard").classList.add("hidden");
     $("loadedBar").classList.remove("hidden");
     $("tabs").classList.remove("hidden");
+  }
+
+  // ================= Usulan Perbaikan Titik Outlet =================
+  // Flag 0 artinya kunjungan di luar radius. Penyebabnya ada dua: salesman
+  // memang tidak di toko, ATAU titik validasi toko di master yang salah.
+  // Kalau kunjungan berkali-kali jatuh di tempat yang sama tapi jauh dari titik
+  // master, yang patut dicurigai adalah titik masternya. Bagian ini menyusun
+  // usulan titik pengganti dari sebaran kunjungan itu sendiri.
+  //
+  // Batas yang tidak boleh dilupakan: kunjungan yang mengumpul rapat
+  // membuktikan KONSISTENSI, bukan KEBENARAN. Salesman yang selalu absen dari
+  // warung yang sama akan terlihat persis sama seperti ini. Karena itu hasilnya
+  // usulan untuk diperiksa orang, bukan koreksi otomatis.
+
+  const RADIUS_DEFAULT = 50;
+
+  const TITIK_YAKIN = {
+    Tinggi: "Semua kunjungan jatuh di titik usulan, dan dikuatkan lebih dari satu sumber (banyak hari / banyak salesman).",
+    Sedang: "Semua kunjungan jatuh di titik usulan, tapi buktinya masih sedikit.",
+    Rendah: "Mayoritas kunjungan jatuh di titik usulan, sebagian menyimpang.",
+  };
+
+  function angka(v) {
+    const n = Number(String(v ?? "").trim().replace(",", "."));
+    return Number.isFinite(n) ? n : null;
+  }
+
+  // Titik (0,0) di data berarti outlet belum di-tag, bukan lokasi di laut Afrika.
+  const titikKosong = (la, lo) =>
+    la === null || lo === null || (Math.abs(la) < 0.001 && Math.abs(lo) < 0.001);
+
+  // Jarak dua titik di bumi, dalam meter.
+  function meter(lat1, lon1, lat2, lon2) {
+    const R = 6371000, rad = Math.PI / 180;
+    const dLat = (lat2 - lat1) * rad, dLon = (lon2 - lon1) * rad;
+    const h = Math.sin(dLat / 2) ** 2
+      + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+
+  // Titik usulan pakai MEDIAN, bukan rata-rata. Tiga kunjungan rapat ditambah
+  // satu kunjungan nyasar 5 km: rata-ratanya meleset jauh, mediannya tidak.
+  function median(arr) {
+    const v = arr.slice().sort((a, b) => a - b);
+    const m = v.length >> 1;
+    return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+  }
+
+  // Jarak dalam meter jadi sulit dibaca begitu lewat seribu ("5.767 m" mudah
+  // disangka 5,7 m). Di atas 1 km ditulis kilometer.
+  function jarakTeks(m) {
+    if (m === null || m === undefined) return "—";
+    return m >= 1000
+      ? `${(m / 1000).toFixed(1).replace(".", ",")} km`
+      : `${Math.round(m).toLocaleString("id-ID")} m`;
+  }
+
+  function hitungTitik() {
+    const perOutlet = new Map();
+    for (const r of state.results) {
+      const la = angka(r.latVisit), lo = angka(r.longVisit);
+      if (titikKosong(la, lo)) continue;
+      let v = perOutlet.get(r.custno);
+      if (!v) { v = []; perOutlet.set(r.custno, v); }
+      v.push({ la, lo, r });
+    }
+
+    const usul = [], tanya = [];
+    let kurang = 0, sudahPas = 0, dampak = 0;
+    for (const [custno, vs] of perOutlet) {
+      // Outlet yang semua kunjungannya sudah IN RADIUS tidak perlu diapa-apakan.
+      if (!vs.some((v) => v.r.flagRadius !== "1")) continue;
+      const ref = vs[0].r;
+      const dasar = {
+        custno,
+        nama: ref.namaTokoEff, salesman: ref.salesmanEff,
+        rayon: ref.rayonEff, alamat: ref.alamatEff,
+        n: vs.length,
+      };
+      // Satu kunjungan tidak bisa membuktikan apa-apa: tidak ada pembanding.
+      if (vs.length < 2) { kurang++; continue; }
+
+      const mLat = median(vs.map((v) => v.la));
+      const mLon = median(vs.map((v) => v.lo));
+      const jarak = vs.map((v) => meter(v.la, v.lo, mLat, mLon));
+      const set = angka(ref.setting) || RADIUS_DEFAULT;
+      // "Rapat" = kunjungan yang akan lolos radius kalau titik usulan dipakai.
+      const dekat = jarak.filter((d) => d <= set);
+      const rapat = dekat.length;
+      const sebar = Math.round(rapat ? Math.max(...dekat) : Math.max(...jarak));
+
+      // Titik master diambil dari baris pertama yang benar-benar punya titik.
+      let curLa = null, curLo = null;
+      for (const v of vs) {
+        const a = angka(v.r.latVal), b = angka(v.r.longVal);
+        if (!titikKosong(a, b)) { curLa = a; curLo = b; break; }
+      }
+      const belumTag = curLa === null;
+      const geser = belumTag ? null : Math.round(meter(mLat, mLon, curLa, curLo));
+      const salesmanBeda = new Set(vs.map((v) => v.r.salesmanEff).filter(Boolean)).size;
+      const hariBeda = new Set(vs.map((v) => tglKunci(v.r.visitDate)).filter(Boolean)).size;
+
+      const mayoritas = rapat >= Math.max(2, Math.ceil(vs.length * 0.6));
+      // Hanya diusulkan kalau titik yang sekarang memang bermasalah: belum
+      // di-tag, atau letaknya di luar radius dari tempat kunjungan berkumpul.
+      const salahSekarang = belumTag || geser > set;
+
+      if (!mayoritas) {
+        // Kunjungannya tidak berkumpul, jadi jarak ke median tidak menggambarkan
+        // apa-apa. Yang dilaporkan jarak antar kunjungan yang paling berjauhan.
+        let jauh = 0;
+        for (let i = 0; i < vs.length; i++)
+          for (let j = i + 1; j < vs.length; j++)
+            jauh = Math.max(jauh, meter(vs[i].la, vs[i].lo, vs[j].la, vs[j].lo));
+        tanya.push({ ...dasar, sebar: Math.round(jauh), rapat,
+                     curLa, curLo, belumTag, salesmanBeda });
+      } else if (!salahSekarang) {
+        // Kunjungan mengumpul tepat di titik master: titiknya sudah benar,
+        // yang di luar radius itu kunjungan yang memang menyimpang.
+        sudahPas++;
+      } else {
+        let bisaLolos = 0;
+        for (let i = 0; i < vs.length; i++)
+          if (vs[i].r.flagRadius !== "1" && jarak[i] <= set) bisaLolos++;
+        dampak += bisaLolos;
+        let yakin = "Rendah";
+        if (rapat === vs.length && (vs.length >= 3 || salesmanBeda > 1)) yakin = "Tinggi";
+        else if (rapat === vs.length || rapat >= 3) yakin = "Sedang";
+        usul.push({ ...dasar, rapat, sebar, mLat, mLon, curLa, curLo,
+                    belumTag, geser, set, salesmanBeda, hariBeda, bisaLolos, yakin });
+      }
+    }
+
+    const urutan = { Tinggi: 0, Sedang: 1, Rendah: 2 };
+    usul.sort((a, b) => urutan[a.yakin] - urutan[b.yakin]
+      || b.bisaLolos - a.bisaLolos || b.rapat - a.rapat
+      || String(a.custno).localeCompare(String(b.custno)));
+    tanya.sort((a, b) => b.sebar - a.sebar);
+
+    state.titik = { usul, tanya, kurang, sudahPas, dampak };
+    renderTitik();
+  }
+
+  function titikBaris() {
+    const mode = $("titikMode") ? $("titikMode").value : "USUL";
+    const q = $("titikSearch") ? $("titikSearch").value.trim().toLowerCase() : "";
+    const src = mode === "TANYA" ? state.titik.tanya : state.titik.usul;
+    if (!q) return src;
+    return src.filter((u) => [u.custno, u.nama, u.salesman, u.rayon, u.alamat]
+      .map((x) => String(x || "").toLowerCase()).join(" ").includes(q));
+  }
+
+  function petaLink(la, lo, teks) {
+    const q = `${la.toFixed(6)},${lo.toFixed(6)}`;
+    return `<a class="maplink" href="https://www.google.com/maps?q=${q}" `
+      + `target="_blank" rel="noopener">${teks}</a>`;
+  }
+
+  function renderTitik() {
+    const sec = $("titikSection");
+    if (!sec) return;
+    const t = state.titik;
+    const ada = t && (t.usul.length || t.tanya.length || t.kurang);
+    sec.classList.toggle("hidden", !ada);
+    if (!ada) return;
+
+    $("titikSummary").innerHTML = [
+      statCard("Bisa diusulkan titiknya", t.usul.length.toLocaleString("id-ID"), "ok",
+        `${t.dampak.toLocaleString("id-ID")} kunjungan jadi IN RADIUS`),
+      statCard("Kunjungan berpencar", t.tanya.length.toLocaleString("id-ID"), "warn",
+        "tanya salesman"),
+      statCard("Titik master sudah pas", t.sudahPas.toLocaleString("id-ID"), "info",
+        "kunjungannya yang menyimpang"),
+      statCard("Baru 1 kunjungan", t.kurang.toLocaleString("id-ID"), "info",
+        "belum bisa disimpulkan"),
+    ].join("");
+
+    const mode = $("titikMode").value;
+    const rows = titikBaris();
+    const tbody = document.querySelector("#titikTable tbody");
+    tbody.innerHTML = rows.slice(0, 300).map((u) => {
+      const sekarang = u.belumTag
+        ? `<span class="nil">belum di-tag</span>`
+        : petaLink(u.curLa, u.curLo, `${u.curLa.toFixed(5)}, ${u.curLo.toFixed(5)}`);
+      const usulSel = mode === "TANYA" ? `<span class="nil">—</span>`
+        : petaLink(u.mLat, u.mLon, `${u.mLat.toFixed(6)}, ${u.mLon.toFixed(6)}`);
+      const geser = mode === "TANYA" || u.geser === null
+        ? `<span class="nil">—</span>` : jarakTeks(u.geser);
+      // Di kelompok berpencar tidak ada titik usulan, jadi "dipakai" tidak punya
+      // arti — yang berguna cuma banyaknya kunjungan yang dibandingkan.
+      const dipakai = mode === "TANYA" ? `${u.n}` : `${u.rapat} / ${u.n}`;
+      const yakin = mode === "TANYA"
+        ? `<span class="tag-cons cons-PROBLEM">Tanya salesman</span>`
+        : `<span class="tag-cons yakin-${u.yakin}" title="${escapeHtml(TITIK_YAKIN[u.yakin])}">${u.yakin}</span>`;
+      const kuat = u.salesmanBeda > 1
+        ? ` <span class="kuat" title="Dikunjungi lebih dari satu salesman — bukti lebih kuat">2+ SLS</span>` : "";
+      return `<tr>
+        <td class="mono">${escapeHtml(u.custno)}</td>
+        <td>${escapeHtml(u.nama)}${kuat}</td>
+        <td>${escapeHtml(u.salesman)}</td>
+        <td class="col-x mono">${escapeHtml(u.rayon)}</td>
+        <td class="num">${dipakai}</td>
+        <td class="num">${jarakTeks(u.sebar)}</td>
+        <td class="mono">${sekarang}</td>
+        <td class="mono">${usulSel}</td>
+        <td class="num">${geser}</td>
+        <td>${yakin}</td>
+        <td class="col-x">${escapeHtml(u.alamat || "")}</td>
+      </tr>`;
+    }).join("");
+    if (!rows.length) {
+      tbody.innerHTML = `<tr><td colspan="11" class="empty">Tidak ada outlet di kelompok ini.</td></tr>`;
+    }
+    const thDipakai = document.querySelector("#titikTable thead th:nth-child(5)");
+    if (thDipakai) thDipakai.textContent = mode === "TANYA" ? "Kunjungan" : "Kunjungan Dipakai";
+    const thSebar = document.querySelector("#titikTable thead th:nth-child(6)");
+    if (thSebar) thSebar.textContent = mode === "TANYA" ? "Jarak Antar Kunjungan" : "Sebaran";
+    stampLabels(document.getElementById("titikTable"));
+    const lebih = rows.length > 300 ? ` (300 teratas ditampilkan)` : "";
+    $("titikCount").textContent = `${rows.length.toLocaleString("id-ID")} outlet${lebih}`;
+  }
+
+  function titikBarisExcel(u, usulan) {
+    return {
+      "Kode Outlet": u.custno,
+      "Nama Toko": u.nama,
+      Salesman: u.salesman,
+      Rayon: u.rayon,
+      "Alamat (DMP)": u.alamat || "",
+      "Kunjungan Dipakai": usulan ? `${u.rapat} dari ${u.n}` : `${u.n} kunjungan`,
+      [usulan ? "Sebaran (m)" : "Jarak Antar Kunjungan (m)"]: u.sebar,
+      "Lat Sekarang": u.belumTag ? "" : u.curLa,
+      "Long Sekarang": u.belumTag ? "" : u.curLo,
+      "Status Titik Sekarang": u.belumTag ? "Belum di-tag" : "Ada",
+      "Lat Usulan": usulan ? Number(u.mLat.toFixed(6)) : "",
+      "Long Usulan": usulan ? Number(u.mLon.toFixed(6)) : "",
+      "Geser (m)": usulan && u.geser !== null ? u.geser : "",
+      Keyakinan: usulan ? u.yakin : "Tanya salesman",
+      "Salesman Berbeda": u.salesmanBeda,
+      "Kunjungan Jadi IN RADIUS": usulan ? u.bisaLolos : "",
+      "Link Peta": usulan
+        ? `https://www.google.com/maps?q=${u.mLat.toFixed(6)},${u.mLon.toFixed(6)}`
+        : (u.belumTag ? "" : `https://www.google.com/maps?q=${u.curLa.toFixed(6)},${u.curLo.toFixed(6)}`),
+    };
+  }
+
+  if ($("titikExport")) {
+    $("titikExport").addEventListener("click", () => {
+      const t = state.titik;
+      if (!t || (!t.usul.length && !t.tanya.length)) return;
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb,
+        XLSX.utils.json_to_sheet(t.usul.map((u) => titikBarisExcel(u, true))), "Usulan Titik");
+      XLSX.utils.book_append_sheet(wb,
+        XLSX.utils.json_to_sheet(t.tanya.map((u) => titikBarisExcel(u, false))), "Perlu Ditanya");
+      XLSX.writeFile(wb, `usulan-titik-outlet-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    });
+    $("titikMode").addEventListener("change", renderTitik);
+    $("titikSearch").addEventListener("input", debounce(renderTitik, 200));
   }
 
   // ---- Shared surface for dash2.js ----
