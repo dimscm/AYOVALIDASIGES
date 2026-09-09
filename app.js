@@ -1589,8 +1589,27 @@
     el.classList.toggle("hidden", !teks);
   }
 
-  function unduh(nama, isi, tipe) {
-    const url = URL.createObjectURL(new Blob(isi, { type: tipe }));
+  // Dua lingkungan, dua cara menyerahkan file. Di GitHub Pages halaman boleh
+  // mengunduh sendiri lewat tautan biasa. Di dalam artifact claude.ai tautan
+  // seperti itu tidak melakukan apa-apa sama sekali — filenya harus diserahkan
+  // lewat izin download milik penampilnya, dan penampil boleh menolak.
+  async function unduh(nama, isi, tipe) {
+    const blob = new Blob(isi, { type: tipe });
+    if (window.claude && typeof window.claude.use === "function") {
+      let dl = null;
+      try { dl = await window.claude.use("downloads"); } catch (e) { dl = null; }
+      if (dl) {
+        try {
+          await dl.save({ filename: nama, data: blob });
+        } catch (e) {
+          if (e && e.code === "declined") return;   // penampil membatalkan
+          throw new Error("Penyimpanan file ditolak penampil"
+            + (e && e.code ? ` (${e.code})` : "") + ". Coba buka versi GitHub Pages.");
+        }
+        return;
+      }
+    }
+    const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = nama;
@@ -1634,7 +1653,7 @@
 
       if (state.filtered.length > BATAS_XLSX) {
         // ﻿ (BOM) supaya huruf beraksen dan tanda "—" tidak berantakan di Excel.
-        unduh(`hasil-validasi-${tgl}.csv`, ["﻿", keCsv(aoa)], "text/csv;charset=utf-8");
+        await unduh(`hasil-validasi-${tgl}.csv`, ["﻿", keCsv(aoa)], "text/csv;charset=utf-8");
         const us = state.titikByOutlet ? [...state.titikByOutlet.values()]
           .filter((u) => u.bucket === "USUL").length : 0;
         pesanExport(`${state.filtered.length.toLocaleString("id-ID")} baris terlalu banyak untuk `
@@ -1647,7 +1666,11 @@
         const usulan = daftarUsulan();
         if (usulan.length)
           XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(usulan), "Usulan Titik");
-        XLSX.writeFile(wb, `hasil-validasi-${tgl}.xlsx`);
+        // Lewat unduh(), bukan XLSX.writeFile: writeFile membuat tautan
+        // unduhannya sendiri, dan tautan itu mati di dalam artifact.
+        const buf = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+        await unduh(`hasil-validasi-${tgl}.xlsx`, [buf],
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       }
     } catch (err) {
       console.error(err);
@@ -1942,6 +1965,7 @@
   // ---- Shared surface for dash2.js ----
   // dash2 reuses the same universal file readers and the DMP outlet index.
   window.M3 = {
+    unduh,
     readAsAoA,
     readRawText,
     detectDelim,

@@ -646,6 +646,21 @@
     $("d2PrevPage").addEventListener("click", () => { if (S.gapPage > 1) { S.gapPage--; renderGap(); } });
     $("d2NextPage").addEventListener("click", () => { S.gapPage++; renderGap(); });
 
+    // XLSX.writeFile membuat tautan unduhannya sendiri, dan tautan itu tidak
+    // melakukan apa-apa di dalam artifact claude.ai. Lewat M3.unduh() filenya
+    // diserahkan dengan cara yang benar di kedua tempat.
+    function simpanWb(wb, nama) {
+      const buf = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+      const simpan = window.M3 && window.M3.unduh;
+      if (simpan) {
+        simpan(nama, [buf],
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+          .catch((e) => { console.error(e); alert((e && e.message) || "File gagal disimpan."); });
+      } else {
+        XLSX.writeFile(wb, nama);
+      }
+    }
+
     $("d2ExportCoverage").addEventListener("click", () => {
       if (!S.coverageRows.length) return;
       const total = S.totalOutlet;
@@ -663,7 +678,7 @@
       const ws = XLSX.utils.json_to_sheet(rows);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Coverage");
-      XLSX.writeFile(wb, `coverage-produk-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      simpanWb(wb, `coverage-produk-${new Date().toISOString().slice(0, 10)}.xlsx`);
     });
 
     $("d2ExportGap").addEventListener("click", () => {
@@ -683,7 +698,7 @@
       const ws = XLSX.utils.json_to_sheet(rows);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Outlet Belum Transaksi");
-      XLSX.writeFile(wb, `outlet-belum-transaksi-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      simpanWb(wb, `outlet-belum-transaksi-${new Date().toISOString().slice(0, 10)}.xlsx`);
     });
   }
 
