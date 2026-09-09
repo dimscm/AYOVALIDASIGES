@@ -929,6 +929,7 @@
     const pdAll = $("filterPeriodeAll"); if (pdAll) pdAll.checked = true;
     const pdLabel = $("filterPeriodeLabel"); if (pdLabel) pdLabel.textContent = "Semua periode";
     if ($("rowPeriodeHht")) $("rowPeriodeHht").classList.add("hidden");
+    if ($("exportHint")) { $("exportHint").textContent = ""; $("exportHint").classList.add("hidden"); }
     document.querySelectorAll(".filterRayonItem").forEach((c) => (c.checked = false));
     const ryAll = $("filterRayonAll"); if (ryAll) ryAll.checked = true;
     const ryLabel = $("filterRayonLabel"); if (ryLabel) ryLabel.textContent = "Semua rayon";
@@ -1520,51 +1521,87 @@
   $("prevPage").addEventListener("click", () => { if (state.page > 1) { state.page--; renderTable(); } });
   $("nextPage").addEventListener("click", () => { state.page++; renderTable(); });
 
-  $("exportBtn").addEventListener("click", () => {
-    if (!state.filtered.length) return;
-    const rows = state.filtered.map((r) => {
-      const info = CATEGORY_INFO[r.category];
-      const cons = CONSISTENCY_INFO[r.consistency] || CONSISTENCY_INFO.SINGLE;
-      const u = state.titikByOutlet && state.titikByOutlet.get(r.custno);
-      return {
-        Kategori: info.label,
-        Konsistensi: cons.label,
-        "Jumlah Kunjungan Outlet": r.visitCount,
-        "Kode Outlet": r.custno,
-        "Nama Toko": r.namaTokoEff,
-        Salesman: r.salesmanEff,
-        "Rayon (Team)": r.rayonEff,
-        Cycle: r.cycleEff,
-        "Alamat Toko": r.alamatEff,
-        "Visit Date": r.visitDate || "",
-        "Jam Masuk": r.jamin || "",
-        "Jam Keluar": r.jamout || "",
-        "Flag Radius": r.flagRadius || "BLANK",
-        Distance: r.distance ?? "",
-        "Lat Visit": r.latVisit ?? "",
-        "Long Visit": r.longVisit ?? "",
-        "Lat Val": r.latVal ?? "",
-        "Long Val": r.longVal ?? "",
-        HHT: r.hht ? (r.hht.hht || "") : "",
-        "Tipe Scan": r.hht ? (r.hht.tipeScan || "") : "",
-        "Alasan HHT": alasanHht(r) || (r.alasanLuar ? r.alasanLuar.alasan : ""),
-        "Alasan Dari Tanggal": alasanHht(r) ? "" : (r.alasanLuar ? (r.alasanLuar.tgl || "tanggal lain") : ""),
-        "Alor Reason": r.alorReason || "",
-        Saran: info.suggest,
-        "Titik Toko": u ? ({
-          USUL: `Perlu diperbaiki: ${u.mLat.toFixed(6)}, ${u.mLon.toFixed(6)}`,
-          TANYA: "Kunjungan berpencar — tanya salesman",
-          PAS: "Sudah benar",
-          SATU: "Baru 1 kunjungan bermasalah",
-        })[u.bucket] : "",
-        "Keyakinan Usulan": u && u.bucket === "USUL" ? u.yakin : "",
-      };
-    });
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Hasil");
-    // Sheet kedua: daftar usulan titik, satu baris per outlet. Sheet pertama
-    // per kunjungan, jadi outlet yang sama muncul berkali-kali di sana —
-    // tidak enak dipakai sebagai daftar kerja perbaikan master.
+  // Menulis file di browser itu mahal. Diukur pada 190.000 baris x 26 kolom
+  // di Chromium: jalur Excel butuh 37 detik dan puncak memori 1,7 GB (versi
+  // lamanya, yang menyusun satu objek per baris, malah menggantung lebih dari
+  // 4 menit); CSV cukup 1,4 detik dan 0,9 GB. Di HP jalur Excel sebesar itu
+  // pasti gagal. Jadi di atas ambang ini filenya ditulis sebagai CSV — tetap
+  // langsung terbuka di Excel.
+  const BATAS_XLSX = 30000;
+
+  const KEPALA_HASIL = ["Kategori", "Konsistensi", "Jumlah Kunjungan Outlet", "Kode Outlet",
+    "Nama Toko", "Salesman", "Rayon (Team)", "Cycle", "Alamat Toko", "Visit Date",
+    "Jam Masuk", "Jam Keluar", "Flag Radius", "Distance", "Lat Visit", "Long Visit",
+    "Lat Val", "Long Val", "HHT", "Tipe Scan", "Alasan HHT", "Alasan Dari Tanggal",
+    "Alor Reason", "Saran", "Titik Toko", "Keyakinan Usulan"];
+
+  const TITIK_TEKS = {
+    TANYA: "Kunjungan berpencar — tanya salesman",
+    PAS: "Sudah benar",
+    SATU: "Baru 1 kunjungan bermasalah",
+  };
+
+  // Baris ditulis sebagai array, bukan objek. Satu objek berisi 26 nama kolom
+  // dikali ratusan ribu baris menghabiskan memori sendiri sebelum filenya
+  // sempat dibuat.
+  function barisHasil(r) {
+    const info = CATEGORY_INFO[r.category];
+    const cons = CONSISTENCY_INFO[r.consistency] || CONSISTENCY_INFO.SINGLE;
+    const u = state.titikByOutlet && state.titikByOutlet.get(r.custno);
+    const titik = !u ? ""
+      : u.bucket === "USUL" ? `Perlu diperbaiki: ${u.mLat.toFixed(6)}, ${u.mLon.toFixed(6)}`
+      : TITIK_TEKS[u.bucket] || "";
+    return [
+      info.label, cons.label, r.visitCount, r.custno, r.namaTokoEff, r.salesmanEff,
+      r.rayonEff, r.cycleEff, r.alamatEff, r.visitDate || "", r.jamin || "", r.jamout || "",
+      r.flagRadius || "BLANK", r.distance ?? "", r.latVisit ?? "", r.longVisit ?? "",
+      r.latVal ?? "", r.longVal ?? "",
+      r.hht ? (r.hht.hht || "") : "", r.hht ? (r.hht.tipeScan || "") : "",
+      alasanHht(r) || (r.alasanLuar ? r.alasanLuar.alasan : ""),
+      alasanHht(r) ? "" : (r.alasanLuar ? (r.alasanLuar.tgl || "tanggal lain") : ""),
+      r.alorReason || "", info.suggest, titik,
+      u && u.bucket === "USUL" ? u.yakin : "",
+    ];
+  }
+
+  // "sep=;" di baris pertama membuat Excel memisah kolomnya sendiri tanpa
+  // wizard import, apa pun setelan pemisah daftar di komputernya.
+  function keCsv(aoa) {
+    const bag = ["sep=;"];
+    for (const baris of aoa) {
+      const b = [];
+      for (const v of baris) {
+        const t = v === null || v === undefined ? "" : String(v);
+        b.push(/[";\r\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t);
+      }
+      bag.push(b.join(";"));
+    }
+    return bag.join("\r\n");
+  }
+
+  // Pesan hasil export ditaruh tepat di bawah tombolnya. Tidak bisa memakai
+  // baris status di atas: setelah panel upload mengkerut, tulisannya tidak
+  // ikut diperbarui lagi, jadi pesannya tidak akan pernah terbaca.
+  function pesanExport(teks) {
+    const el = $("exportHint");
+    if (!el) return;
+    el.textContent = teks;
+    el.classList.toggle("hidden", !teks);
+  }
+
+  function unduh(nama, isi, tipe) {
+    const url = URL.createObjectURL(new Blob(isi, { type: tipe }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = nama;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+
+  // Daftar usulan titik: satu baris per outlet, bukan per kunjungan.
+  function daftarUsulan() {
     const sudah = new Set(), usulan = [];
     for (const r of state.filtered) {
       const u = state.titikByOutlet && state.titikByOutlet.get(r.custno);
@@ -1575,10 +1612,54 @@
     const urutan = { Tinggi: 0, Sedang: 1, Rendah: 2 };
     usulan.sort((x, y) => urutan[x.Keyakinan] - urutan[y.Keyakinan]
       || y["Kunjungan Jadi IN RADIUS"] - x["Kunjungan Jadi IN RADIUS"]);
-    if (usulan.length)
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(usulan), "Usulan Titik");
-    const fname = `hasil-validasi-${new Date().toISOString().slice(0, 10)}.xlsx`;
-    XLSX.writeFile(wb, fname);
+    return usulan;
+  }
+
+  $("exportBtn").addEventListener("click", async () => {
+    if (!state.filtered.length) return;
+    const btn = $("exportBtn");
+    const semula = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Menyiapkan...";
+    clearError();
+    pesanExport("");
+    // Menulis file mengunci layar. Diberi jeda sebentar supaya tulisan
+    // "Menyiapkan..." sempat tampil — kalau tidak, tombolnya terlihat seperti
+    // tidak bereaksi sama sekali.
+    await new Promise((r) => setTimeout(r, 40));
+    const tgl = new Date().toISOString().slice(0, 10);
+    try {
+      const aoa = [KEPALA_HASIL];
+      for (const r of state.filtered) aoa.push(barisHasil(r));
+
+      if (state.filtered.length > BATAS_XLSX) {
+        // ﻿ (BOM) supaya huruf beraksen dan tanda "—" tidak berantakan di Excel.
+        unduh(`hasil-validasi-${tgl}.csv`, ["﻿", keCsv(aoa)], "text/csv;charset=utf-8");
+        const us = state.titikByOutlet ? [...state.titikByOutlet.values()]
+          .filter((u) => u.bucket === "USUL").length : 0;
+        pesanExport(`${state.filtered.length.toLocaleString("id-ID")} baris terlalu banyak untuk `
+          + `satu file Excel, jadi disimpan sebagai CSV — tinggal dibuka dengan Excel seperti biasa.`
+          + (us ? ` Untuk daftar usulan titik, pilih dulu "Titik toko perlu diperbaiki" `
+                  + `di filter sebelah, lalu Export lagi.` : ""));
+      } else {
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), "Hasil");
+        const usulan = daftarUsulan();
+        if (usulan.length)
+          XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(usulan), "Usulan Titik");
+        XLSX.writeFile(wb, `hasil-validasi-${tgl}.xlsx`);
+      }
+    } catch (err) {
+      console.error(err);
+      // Tanpa ini, kegagalan export tidak meninggalkan jejak apa pun di layar —
+      // dari sisi pengguna tombolnya "tidak bisa" tanpa sebab.
+      showError(new Error(`File gagal dibuat (${state.filtered.length.toLocaleString("id-ID")} `
+        + `baris): ${(err && err.message) || err}. Saring dulu datanya — per salesman, per `
+        + `rayon, atau per periode — lalu export lagi.`));
+    } finally {
+      btn.disabled = false;
+      btn.textContent = semula;
+    }
   });
 
   function debounce(fn, ms) {
