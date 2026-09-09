@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>M3 Beverage Mayora</title>
-  <link rel="stylesheet" href="styles.css?v=29" />
+  <link rel="stylesheet" href="styles.css?v=30" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23c8102e'/%3E%3Ctext x='50' y='62' font-size='34' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EM3%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -120,8 +120,7 @@
             <p class="hnote"><b>Kolom "Titik Toko"</b> menjawab pertanyaan: kalau flag-nya 0 atau blank, yang salah
               salesmannya atau titik tokonya? Kalau kunjungan berkali-kali jatuh di tempat yang sama
               tapi jauh dari titik toko di master, yang patut dicurigai titik tokonya —
-              hanya kunjungan bermasalah (flag 0 dan blank) yang dipakai menghitung, dan outlet yang
-              pernah punya kunjungan flag 1 tidak diusulkan karena titiknya sudah terbukti benar — dan titik
+              hanya kunjungan bermasalah (flag 0 dan blank) yang dipakai menghitung — dan titik
               penggantinya dihitung dari kunjungan itu sendiri. Klik koordinatnya untuk buka peta,
               lalu cocokkan dengan alamat sebelum diperbaiki di master.
               <b>Ini usulan, bukan koreksi otomatis:</b> kunjungan yang mengumpul rapat membuktikan
@@ -132,6 +131,20 @@
               <b>"Semua outlet"</b> di atas untuk melihat satu kelompok saja, dan tombol
               <b>Export Excel</b> ikut memberi sheet <b>Usulan Titik</b> berisi satu baris per outlet.
               Makin banyak periode yang di-upload, makin banyak outlet yang bisa dinilai.</p>
+            <p class="hnote"><b>Kalau outlet ini pernah punya kunjungan flag 1</b>, titiknya sudah
+              terbukti bisa memvalidasi — jadi tidak ditebak ulang. Yang dicek justru apakah titik itu
+              <b>pernah diubah</b>: kalau koordinat yang dulu menghasilkan flag 1 sudah diganti dan
+              kunjungan sekarang jadi flag 0, yang muncul adalah
+              <b>"Titik toko diubah — kembalikan yang lama"</b>, lengkap dengan koordinat lamanya dan
+              tanggal terakhir ia lolos. Ini usulan paling kuat yang ada di halaman ini: dasarnya bukan
+              tebakan dari sebaran kunjungan, tapi angka yang sistem sendiri sudah nyatakan lolos.
+              Sebaliknya, kalau titiknya sudah dibetulkan setelah tanggal itu, barisnya ditandai
+              <b>"sudah diperbaiki setelah tanggal ini"</b> — masalah lama yang sudah selesai, tidak
+              perlu ditindaklanjuti.</p>
+            <p class="hnote"><b>Rentang tanggal</b> di bawah filter menentukan kunjungan mana yang
+              dinilai — berguna kalau validasi baru diperbaiki belakangan dan masalah di tanggal lama
+              sudah tidak relevan. Buktinya tidak ikut dipotong: kunjungan lama yang dulu lolos tetap
+              dipakai sebagai acuan koordinat yang benar, justru karena itu yang paling bisa dipercaya.</p>
             <p class="hnote"><b>Konsistensi</b> membandingkan semua kunjungan di outlet yang sama:
               <span class="tag-cons cons-VALID">Konsisten Valid</span> semua kunjungan IN RADIUS &middot;
               <span class="tag-cons cons-PROBLEM">Konsisten Bermasalah</span> semua OUT RADIUS/BLANK &middot;
@@ -195,6 +208,7 @@
           </div>
           <select id="filterTitik" title="Saring berdasarkan kondisi titik lokasi toko">
             <option value="">Semua outlet</option>
+            <option value="KEMBALI">Titik toko diubah — kembalikan yang lama</option>
             <option value="USUL">Titik toko perlu diperbaiki</option>
             <option value="TANYA">Kunjungan berpencar — tanya salesman</option>
             <option value="PAS">Titik toko sudah benar</option>
@@ -214,6 +228,14 @@
             <span>Detail lengkap</span>
           </label>
           <button id="exportBtn" class="ghost">Export Excel</button>
+        </div>
+        <div class="daterow hidden" id="rowTanggal">
+          <span class="datelabel">Tanggal kunjungan</span>
+          <input type="date" id="tglDari" aria-label="Dari tanggal" />
+          <span class="datesep">s/d</span>
+          <input type="date" id="tglSampai" aria-label="Sampai tanggal" />
+          <button type="button" class="ghost sm" id="tglReset">Semua tanggal</button>
+          <span class="datehint" id="tglInfo"></span>
         </div>
         <p class="exporthint hidden" id="exportHint"></p>
 
@@ -383,13 +405,13 @@
       </section>
     </div>
 
-    <p class="credit">dimscm &middot; v29</p>
+    <p class="credit">dimscm &middot; v30</p>
   </main>
 
   <script src="vendor/xlsx.full.min.js"></script>
   <script src="vendor/jszip.min.js"></script>
   <script src="vendor/7zz.umd.js"></script>
-  <script src="app.js?v=29"></script>
-  <script src="dash2.js?v=29"></script>
+  <script src="app.js?v=30"></script>
+  <script src="dash2.js?v=30"></script>
 </body>
 </html>

@@ -311,6 +311,31 @@
 
   // Alasan dari HHT detail (mis. "B4-Order By Phone", "B6-Tertutup Barang").
   // Nilai " -" / "-" berarti tidak ada alasan tercatat.
+  // tglKunci() hanya menghasilkan "dd-mm" — cukup untuk mencocokkan HHT dalam
+  // satu tahun, tapi tidak bisa diurutkan lintas tahun. Untuk menyaring rentang
+  // tanggal dan mengurutkan riwayat titik, dibutuhkan tanggal utuh.
+  function tglIso(v) {
+    if (v === null || v === undefined || v === "") return "";
+    if (v instanceof Date)
+      return v.getFullYear() + "-" + pad2(v.getMonth() + 1) + "-" + pad2(v.getDate());
+    if (typeof v === "number") {
+      const d = new Date(Date.UTC(1899, 11, 30) + v * 86400000);
+      return d.getUTCFullYear() + "-" + pad2(d.getUTCMonth() + 1) + "-" + pad2(d.getUTCDate());
+    }
+    const s = String(v).trim().toUpperCase();
+    let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);            // 2026-08-24
+    if (m) return m[1] + "-" + pad2(+m[2]) + "-" + pad2(+m[3]);
+    m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/); // 24/08/2026
+    if (m) {
+      const th = m[3].length === 2 ? "20" + m[3] : m[3];
+      return th + "-" + pad2(+m[2]) + "-" + pad2(+m[1]);
+    }
+    m = s.match(/^(\d{1,2})[\s-]+([A-Z]{3})[\s-]*(\d{4})?/);    // 29 JUL 2026
+    if (m && BULAN[m[2]])
+      return (m[3] || new Date().getFullYear()) + "-" + pad2(BULAN[m[2]]) + "-" + pad2(+m[1]);
+    return "";
+  }
+
   function alasanHht(r) {
     if (!r.hht) return "";
     const a = String(r.hht.alasan || "").trim();
@@ -929,6 +954,10 @@
     const pdAll = $("filterPeriodeAll"); if (pdAll) pdAll.checked = true;
     const pdLabel = $("filterPeriodeLabel"); if (pdLabel) pdLabel.textContent = "Semua periode";
     if ($("rowPeriodeHht")) $("rowPeriodeHht").classList.add("hidden");
+    if ($("rowTanggal")) {
+      $("rowTanggal").classList.add("hidden");
+      $("tglDari").value = ""; $("tglSampai").value = "";
+    }
     if ($("exportHint")) { $("exportHint").textContent = ""; $("exportHint").classList.add("hidden"); }
     document.querySelectorAll(".filterRayonItem").forEach((c) => (c.checked = false));
     const ryAll = $("filterRayonAll"); if (ryAll) ryAll.checked = true;
@@ -1059,7 +1088,7 @@
         // tanggal kunjungan jadi penggantinya.
         const periodeEff = String(r.periode ?? "").trim() || (tgl ? "Bulan " + tgl.split("-")[1] : "");
         return { ...r, hht, hhtNote, alasanLuar, dmp, category: cat, namaTokoEff, salesmanEff,
-                 alamatEff, rayonEff, cycleEff, diLuarHht, periodeEff };
+                 alamatEff, rayonEff, cycleEff, diLuarHht, periodeEff, tglIso: tglIso(r.visitDate) };
       });
 
       // Consistency per outlet: bandingkan semua kunjungan outlet yang sama.
@@ -1094,6 +1123,21 @@
           return ta - tb || a.localeCompare(b, "id", { numeric: true });
         });
       populateRayon(rayons);
+      // Kotak tanggal diisi rentang penuh datanya. Dibiarkan kosong berarti
+      // "semua tanggal", jadi tidak ada yang tersaring diam-diam.
+      const semuaTgl = results.map((r) => r.tglIso).filter(Boolean).sort();
+      const kotakTgl = $("rowTanggal");
+      if (kotakTgl) {
+        const ada = semuaTgl.length > 0;
+        kotakTgl.classList.toggle("hidden", !ada);
+        if (ada) {
+          const min = semuaTgl[0], max = semuaTgl[semuaTgl.length - 1];
+          for (const id of ["tglDari", "tglSampai"]) {
+            $(id).min = min; $(id).max = max; $(id).value = "";
+          }
+          $("tglInfo").textContent = `data: ${tglTampil(min)} s/d ${tglTampil(max)}`;
+        }
+      }
       const periodes = [...new Set(results.map((r) => r.periodeEff).filter(Boolean))]
         .sort((a, b) => a.localeCompare(b, "id", { numeric: true }));
       populatePeriode(periodes);
@@ -1263,7 +1307,9 @@
     const kel = $("filterTitik") ? $("filterTitik").value : "";
     const hanyaHht = $("filterPeriodeHht") && $("filterPeriodeHht").checked;
     const pers = getSelectedPeriode();
+    const rg = rentangTanggal();
     return state.results.filter((r) => {
+      if (!dalamRentang(r, rg)) return false;
       if (hanyaHht && r.diLuarHht) return false;
       if (pers.size > 0 && !pers.has(r.periodeEff)) return false;
       if (onlyMixed && r.consistency !== "MIXED") return false;
@@ -1518,6 +1564,16 @@
   });
   if ($("filterTitik")) $("filterTitik").addEventListener("change", applyFilters);
   if ($("filterPeriodeHht")) $("filterPeriodeHht").addEventListener("change", applyFilters);
+  // Rentang tanggal juga menentukan penilaian titik: kunjungan lama sering
+  // bermasalah karena titik masternya memang belum diperbaiki waktu itu.
+  // Jadi analisanya dihitung ulang, bukan cuma barisnya yang disaring.
+  for (const id of ["tglDari", "tglSampai"]) {
+    if ($(id)) $(id).addEventListener("change", () => { hitungTitik(); applyFilters(); });
+  }
+  if ($("tglReset")) $("tglReset").addEventListener("click", () => {
+    $("tglDari").value = ""; $("tglSampai").value = "";
+    hitungTitik(); applyFilters();
+  });
   $("prevPage").addEventListener("click", () => { if (state.page > 1) { state.page--; renderTable(); } });
   $("nextPage").addEventListener("click", () => { state.page++; renderTable(); });
 
@@ -1550,6 +1606,8 @@
     const u = state.titikByOutlet && state.titikByOutlet.get(r.custno);
     const titik = !u ? ""
       : u.bucket === "USUL" ? `Perlu diperbaiki: ${u.mLat.toFixed(6)}, ${u.mLon.toFixed(6)}`
+      : u.bucket === "KEMBALI" ? `Kembalikan titik lama: ${u.mLat.toFixed(6)}, ${u.mLon.toFixed(6)}`
+      : u.bucket === "PAS" && u.sebab === "diperbaiki" ? "Sudah diperbaiki setelah tanggal ini"
       : TITIK_TEKS[u.bucket] || "";
     return [
       info.label, cons.label, r.visitCount, r.custno, r.namaTokoEff, r.salesmanEff,
@@ -1560,7 +1618,7 @@
       alasanHht(r) || (r.alasanLuar ? r.alasanLuar.alasan : ""),
       alasanHht(r) ? "" : (r.alasanLuar ? (r.alasanLuar.tgl || "tanggal lain") : ""),
       r.alorReason || "", info.suggest, titik,
-      u && u.bucket === "USUL" ? u.yakin : "",
+      u && (u.bucket === "USUL" || u.bucket === "KEMBALI") ? u.yakin : "",
     ];
   }
 
@@ -1624,13 +1682,17 @@
     const sudah = new Set(), usulan = [];
     for (const r of state.filtered) {
       const u = state.titikByOutlet && state.titikByOutlet.get(r.custno);
-      if (!u || u.bucket !== "USUL" || sudah.has(r.custno)) continue;
+      if (!u || (u.bucket !== "USUL" && u.bucket !== "KEMBALI") || sudah.has(r.custno)) continue;
       sudah.add(r.custno);
       usulan.push(titikBarisExcel(r.custno, u, r));
     }
+    // Yang paling pasti didahulukan: mengembalikan koordinat yang dulu terbukti
+    // lolos jauh lebih meyakinkan daripada menebak dari sebaran kunjungan.
     const urutan = { Tinggi: 0, Sedang: 1, Rendah: 2 };
-    usulan.sort((x, y) => urutan[x.Keyakinan] - urutan[y.Keyakinan]
-      || y["Kunjungan Jadi IN RADIUS"] - x["Kunjungan Jadi IN RADIUS"]);
+    usulan.sort((x, y) =>
+      (x.Tindakan < y.Tindakan ? -1 : x.Tindakan > y.Tindakan ? 1 : 0)
+      || urutan[x.Keyakinan] - urutan[y.Keyakinan]
+      || (y["Kunjungan Jadi IN RADIUS"] || 0) - (x["Kunjungan Jadi IN RADIUS"] || 0));
     return usulan;
   }
 
@@ -1789,6 +1851,14 @@
 
   // Jarak dalam meter jadi sulit dibaca begitu lewat seribu ("5.767 m" mudah
   // disangka 5,7 m). Di atas 1 km ditulis kilometer.
+  // Tanggal ditulis seperti kebiasaan setempat: 24/08/2026, bukan 2026-08-24.
+  // Ditulis sebagai deklarasi fungsi supaya bisa dipakai di mana saja, tidak
+  // tergantung urutan baris di berkas ini.
+  function tglTampil(iso) {
+    const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return m ? `${m[3]}/${m[2]}/${m[1]}` : String(iso || "");
+  }
+
   function jarakTeks(m) {
     if (m === null || m === undefined) return "—";
     return m >= 1000
@@ -1802,7 +1872,79 @@
       + `target="_blank" rel="noopener">${teks}</a>`;
   }
 
+  // Rentang tanggal yang sedang dipakai menilai titik. Kunjungan lama sering
+  // bermasalah karena titik masternya memang belum diperbaiki waktu itu —
+  // kalau ikut dihitung, outlet yang sekarang sudah benar tetap terlihat
+  // bermasalah.
+  function rentangTanggal() {
+    const d = $("tglDari"), sm = $("tglSampai");
+    return { dari: d && d.value ? d.value : "", sampai: sm && sm.value ? sm.value : "" };
+  }
+
+  function dalamRentang(r, rg) {
+    if (!rg.dari && !rg.sampai) return true;
+    if (!r.tglIso) return true;          // tanggal tidak terbaca: jangan dibuang
+    if (rg.dari && r.tglIso < rg.dari) return false;
+    if (rg.sampai && r.tglIso > rg.sampai) return false;
+    return true;
+  }
+
+  // Mencari koordinat master yang DULU terbukti benar tapi sudah diganti.
+  // Bukti terkuat yang ada di data: koordinat yang waktu itu menghasilkan
+  // FLAG 1 — bukan tebakan dari sebaran kunjungan, tapi angka yang sistem
+  // sendiri sudah nyatakan lolos.
+  // Koordinat master yang TERAKHIR dipakai di outlet ini. Diambil menurut
+  // tanggal, bukan urutan baris — baris pertama di file belum tentu yang
+  // paling awal.
+  function titikAkhir(semua) {
+    const urut = semua.slice().sort((a, b) =>
+      String(a.r.tglIso || "").localeCompare(String(b.r.tglIso || "")));
+    for (let i = urut.length - 1; i >= 0; i--) {
+      const a = angka(urut[i].r.latVal), b = angka(urut[i].r.longVal);
+      if (!titikKosong(a, b)) return { la: a, lo: b, tgl: urut[i].r.tglIso || "" };
+    }
+    return null;
+  }
+
+  function titikTerbukti(semua, set) {
+    // Kunjungan diurutkan menurut tanggal supaya "titik sekarang" benar-benar
+    // yang terakhir dipakai, bukan yang kebetulan ada di baris pertama.
+    const urut = semua.slice().sort((a, b) =>
+      String(a.r.tglIso || "").localeCompare(String(b.r.tglIso || "")));
+    const kini = titikAkhir(semua);
+    if (!kini) return null;
+    const curLa = kini.la, curLo = kini.lo;
+
+    // Koordinat terakhir yang pernah menghasilkan flag 1.
+    let la = null, lo = null, tgl = "";
+    for (let i = urut.length - 1; i >= 0; i--) {
+      const v = urut[i];
+      if (v.r.flagRadius !== "1") continue;
+      const a = angka(v.r.latVal), b = angka(v.r.longVal);
+      if (titikKosong(a, b)) continue;
+      la = a; lo = b; tgl = v.r.tglIso || "";
+      break;
+    }
+    if (la === null) return null;
+
+    const geser = Math.round(meter(la, lo, curLa, curLo));
+    // Kalau titiknya praktis tidak berubah, tidak ada yang perlu dikembalikan.
+    if (geser <= set) return null;
+
+    // Berapa kunjungan bermasalah yang akan lolos kalau titik lama dipakai lagi.
+    let bisaLolos = 0;
+    for (const v of urut)
+      if (v.r.flagRadius !== "1" && meter(v.la, v.lo, la, lo) <= set) bisaLolos++;
+    if (!bisaLolos) return null;   // mengembalikan titik lama tidak menolong apa-apa
+
+    return { la, lo, curLa, curLo, geser, tgl, bisaLolos };
+  }
+
   function hitungTitik() {
+    const rg = rentangTanggal();
+    // Rentang tanggal menentukan kunjungan mana yang DINILAI, bukan bukti mana
+    // yang boleh dipakai. Justru kunjungan lama yang dulu lolos itulah acuan
+    // koordinat yang benar — kalau ikut dibuang, buktinya hilang.
     const perOutlet = new Map();
     for (const r of state.results) {
       const la = angka(r.latVisit), lo = angka(r.longVisit);
@@ -1813,21 +1955,50 @@
     }
 
     const info = new Map();
-    const jml = { usul: 0, tanya: 0, pas: 0, satu: 0, dampak: 0 };
+    const jml = { kembali: 0, usul: 0, tanya: 0, pas: 0, satu: 0, dampak: 0 };
     for (const [custno, semua] of perOutlet) {
-      // Yang dipakai menghitung HANYA kunjungan bermasalah — flag 0 dan blank.
-      // Kunjungan flag 1 sudah masuk radius, tidak ada yang perlu diusulkan
-      // untuk itu, dan kalau ikut dihitung malah menggeser titik usulan.
-      const vs = semua.filter((v) => v.r.flagRadius !== "1");
-      if (!vs.length) continue;   // outlet ini sudah beres seluruhnya
+      // Yang DINILAI: kunjungan bermasalah (flag 0 dan blank) di dalam rentang
+      // tanggal yang dipilih. Kunjungan flag 1 sudah masuk radius — tidak ada
+      // yang perlu diusulkan untuknya, dan kalau ikut dihitung malah menggeser
+      // titik usulan.
+      const vs = semua.filter((v) => v.r.flagRadius !== "1" && dalamRentang(v.r, rg));
+      if (!vs.length) continue;   // di rentang ini outlet tidak bermasalah
       const ref = vs[0].r;
+      const set = angka(ref.setting) || RADIUS_DEFAULT;
+      const pernahLolos = semua.some((v) => v.r.flagRadius === "1");
 
-      // Pernah ada kunjungan yang lolos radius di outlet ini: berarti titik
-      // toko di master sudah terbukti bisa memvalidasi. Yang menyimpang
-      // kunjungannya, bukan titiknya — jadi tidak diusulkan pindah.
-      if (semua.length > vs.length) {
-        info.set(custno, { bucket: "PAS", sebab: "lolos", n: semua.length, masalah: vs.length });
-        jml.pas++;
+      // Pernah ada kunjungan yang lolos radius di outlet ini — kapan pun, tidak
+      // harus di dalam rentang. Dua kemungkinan yang harus dibedakan:
+      //  a. titiknya masih sama seperti waktu lolos  -> titiknya benar,
+      //     yang menyimpang kunjungannya;
+      //  b. titiknya sudah DIUBAH sejak itu           -> perubahannya yang
+      //     merusak. Koordinat lama sudah terbukti benar oleh sistem sendiri,
+      //     jadi acuannya bukan tebakan dari sebaran kunjungan, melainkan
+      //     angka yang dulu dipakai.
+      if (pernahLolos) {
+        const lama = titikTerbukti(semua, set);
+        if (lama) {
+          info.set(custno, { bucket: "KEMBALI", n: semua.length, masalah: vs.length,
+                             mLat: lama.la, mLon: lama.lo, curLa: lama.curLa, curLo: lama.curLo,
+                             geser: lama.geser, tglLolos: lama.tgl, belumTag: false,
+                             salesmanBeda: new Set(semua.map((v) => v.r.salesmanEff).filter(Boolean)).size,
+                             bisaLolos: lama.bisaLolos, yakin: "Tinggi" });
+          jml.kembali++;
+          jml.dampak += lama.bisaLolos;
+        } else {
+          // Titik yang dipakai waktu kunjungan bermasalah itu ternyata sudah
+          // diganti. Artinya masalahnya sudah selesai dengan sendirinya — ini
+          // yang membedakan "masih salah" dari "dulu salah, sekarang beres".
+          const kini = titikAkhir(semua);
+          const sudahDiperbaiki = !!kini && vs.some((v) => {
+            const a = angka(v.r.latVal), b = angka(v.r.longVal);
+            return !titikKosong(a, b) && meter(a, b, kini.la, kini.lo) > set;
+          });
+          info.set(custno, { bucket: "PAS", sebab: sudahDiperbaiki ? "diperbaiki" : "lolos",
+                             n: semua.length, masalah: vs.length,
+                             tglBaru: sudahDiperbaiki ? kini.tgl : "" });
+          jml.pas++;
+        }
         continue;
       }
 
@@ -1837,7 +2008,6 @@
       const mLat = median(vs.map((v) => v.la));
       const mLon = median(vs.map((v) => v.lo));
       const jarak = vs.map((v) => meter(v.la, v.lo, mLat, mLon));
-      const set = angka(ref.setting) || RADIUS_DEFAULT;
       // "Rapat" = kunjungan yang akan lolos radius kalau titik usulan dipakai.
       const dekat = jarak.filter((d) => d <= set);
       const rapat = dekat.length;
@@ -1897,10 +2067,11 @@
   function labelTitikFilter() {
     const sel = $("filterTitik");
     if (!sel) return;
-    const j = state.titikStats || { usul: 0, tanya: 0, pas: 0, satu: 0 };
+    const j = state.titikStats || { kembali: 0, usul: 0, tanya: 0, pas: 0, satu: 0 };
     const n = (x) => x.toLocaleString("id-ID");
     const teks = {
       "": "Semua outlet",
+      KEMBALI: `Titik toko diubah — kembalikan yang lama (${n(j.kembali)})`,
       USUL: `Titik toko perlu diperbaiki (${n(j.usul)})`,
       TANYA: `Kunjungan berpencar — tanya salesman (${n(j.tanya)})`,
       PAS: `Titik toko sudah benar (${n(j.pas)})`,
@@ -1920,12 +2091,24 @@
     if (u.bucket === "SATU")
       return `<span class="nil">Baru 1 kunjungan bermasalah — belum bisa dinilai</span>`;
     if (u.bucket === "PAS")
-      return `<span class="nil">Titik toko sudah benar${u.sebab === "lolos"
-        ? " — kunjungan lain di outlet ini masuk radius" : ""}</span>`;
+      return u.sebab === "diperbaiki"
+        ? `<span class="nil">Titik toko sudah diperbaiki setelah tanggal ini — tidak perlu tindakan</span>`
+        : `<span class="nil">Titik toko sudah benar — kunjungan lain di outlet ini masuk radius</span>`;
     if (u.bucket === "TANYA")
       return `<span class="nil">Kunjungan berpencar ${jarakTeks(u.sebar)} — tanyakan ke salesman</span>`;
     const kuat = u.salesmanBeda > 1
       ? ` <span class="kuat" title="Dikunjungi lebih dari satu salesman yang berbeda — bukti lebih kuat">2+ SLS</span>` : "";
+    // Mengembalikan koordinat yang dulu terbukti lolos berbeda sifatnya dari
+    // menebak titik baru dari sebaran kunjungan, jadi kalimatnya pun berbeda.
+    if (u.bucket === "KEMBALI") {
+      const kapan = u.tglLolos ? ` (terakhir lolos ${tglTampil(u.tglLolos)})` : "";
+      return `<b class="titik-aksi kembali">Titik toko diubah — kembalikan yang lama</b>`
+        + ` <span class="tag-cons yakin-Tinggi" title="Koordinat ini dulu menghasilkan FLAG 1 di outlet yang sama. Bukan tebakan dari sebaran kunjungan — sistem sendiri yang sudah menyatakannya lolos.">Tinggi</span>${kuat}`
+        + `<span class="titik-sub">titik dipindah ${jarakTeks(u.geser)} dari titik lama${kapan}`
+        + ` &middot; ${u.bisaLolos} kunjungan akan lolos lagi<br>`
+        + petaLink(u.mLat, u.mLon, `${u.mLat.toFixed(6)}, ${u.mLon.toFixed(6)}`)
+        + ` &mdash; titik lama, buka peta</span>`;
+    }
     // Kalimatnya dulu, angkanya belakangan. Yang membaca tabel ini bukan orang
     // yang hafal arti koordinat — yang perlu langsung terbaca adalah "harus
     // diapakan", bukan "berapa derajat".
@@ -1941,23 +2124,27 @@
   // Baris untuk sheet "Usulan Titik": satu baris per outlet, bukan per
   // kunjungan — yang dipakai orang gudang/master untuk memperbaiki datanya.
   function titikBarisExcel(custno, u, r) {
+    const kembali = u.bucket === "KEMBALI";
     return {
+      Tindakan: kembali ? "Kembalikan ke titik lama yang dulu lolos" : "Ganti ke titik usulan",
       "Kode Outlet": custno,
       "Nama Toko": r.namaTokoEff,
       Salesman: r.salesmanEff,
       Rayon: r.rayonEff,
       "Alamat (DMP)": r.alamatEff || "",
-      "Kunjungan Dipakai": `${u.rapat} dari ${u.n}`,
-      "Sebaran (m)": u.sebar,
+      "Dasar Usulan": kembali
+        ? `Koordinat ini menghasilkan FLAG 1 pada ${tglTampil(u.tglLolos)}`
+        : `${u.rapat} dari ${u.n} kunjungan mengumpul di titik ini`,
+      "Sebaran (m)": u.sebar === undefined ? "" : u.sebar,
       "Lat Sekarang": u.belumTag ? "" : u.curLa,
       "Long Sekarang": u.belumTag ? "" : u.curLo,
       "Status Titik Sekarang": u.belumTag ? "Belum di-tag" : "Ada",
       "Lat Usulan": Number(u.mLat.toFixed(6)),
       "Long Usulan": Number(u.mLon.toFixed(6)),
-      "Geser (m)": u.geser === null ? "" : u.geser,
+      "Geser (m)": u.geser === null || u.geser === undefined ? "" : u.geser,
       Keyakinan: u.yakin,
       "Salesman Berbeda": u.salesmanBeda,
-      "Kunjungan Jadi IN RADIUS": u.bisaLolos,
+      "Kunjungan Jadi IN RADIUS": u.bisaLolos === undefined ? "" : u.bisaLolos,
       "Link Peta": `https://www.google.com/maps?q=${u.mLat.toFixed(6)},${u.mLon.toFixed(6)}`,
     };
   }

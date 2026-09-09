@@ -286,6 +286,25 @@ body.full-cols .col-x { display: table-cell; }
 .yakin-Sedang { background: var(--info-bg); color: var(--info); }
 .yakin-Rendah { background: var(--warn-bg); color: var(--warn); }
 
+/* Rentang tanggal kunjungan. Dipisah dari toolbar supaya dua kotak tanggal
+   dan keterangannya tetap satu kesatuan yang terbaca. */
+.daterow {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+  margin: -4px 0 12px; padding: 9px 11px;
+  background: var(--line-2); border: 1px solid var(--line); border-radius: var(--r);
+}
+.datelabel { font-size: 12px; color: var(--ink-2); font-weight: 600; }
+.datesep { font-size: 12px; color: var(--muted); }
+.daterow input[type=date] {
+  padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px;
+  background: #fff; font-size: 13px; min-height: 38px;
+}
+.datehint { font-size: 11.5px; color: var(--muted); margin-left: auto; }
+
+/* Tindakan mengembalikan koordinat lama dibedakan warnanya dari usulan biasa:
+   dasarnya bukan tebakan, tapi angka yang dulu sudah menghasilkan flag 1. */
+.titik-aksi.kembali { color: var(--info); }
+
 /* Keterangan hasil export, tepat di bawah tombolnya. */
 .exporthint {
   margin: -6px 0 12px; padding: 8px 11px; font-size: 12px; line-height: 1.55;
@@ -393,6 +412,12 @@ tr.row-nil td { background: #fffbfb; }
   .toolbar > button { padding: 11px 16px; }
   /* Kotak cari dan dropdown ikut ukuran sentuh yang sama dengan tombol. */
   .toolbar > input, .toolbar > select { min-height: 44px; padding: 10px 12px; }
+  /* Dua kotak tanggal berdampingan, sisanya turun satu baris. */
+  .daterow { gap: 6px; }
+  .datelabel { flex-basis: 100%; }
+  .daterow input[type=date] { flex: 1; min-width: 0; min-height: 44px; }
+  .daterow .ghost.sm { flex-basis: 100%; }
+  .datehint { flex-basis: 100%; margin-left: 0; }
 
   .summary { grid-template-columns: 1fr 1fr; gap: 8px; }
   .stat b { font-size: 19px; }
