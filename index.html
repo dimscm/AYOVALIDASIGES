@@ -183,6 +183,16 @@
               <div id="filterRayonList"></div>
             </div>
           </div>
+          <div class="multi hidden" id="filterPeriode">
+            <button type="button" class="multi-btn" id="filterPeriodeBtn">
+              <span id="filterPeriodeLabel">Semua periode</span><span class="chev">▾</span>
+            </button>
+            <div class="multi-menu" id="filterPeriodeMenu" hidden>
+              <label class="multi-opt all"><input type="checkbox" id="filterPeriodeAll" checked /> ↺ Semua periode</label>
+              <div class="multi-sep"></div>
+              <div id="filterPeriodeList"></div>
+            </div>
+          </div>
           <select id="filterTitik" title="Saring berdasarkan kondisi titik lokasi toko">
             <option value="">Semua outlet</option>
             <option value="USUL">Titik toko perlu diperbaiki</option>
@@ -190,6 +200,11 @@
             <option value="PAS">Titik toko sudah benar</option>
             <option value="SATU">Baru 1 kunjungan bermasalah</option>
           </select>
+          <label class="check-toggle hidden" id="rowPeriodeHht"
+                 title="Kunjungan yang tanggalnya tidak ada di file HHT tidak bisa dinilai scan-nya">
+            <input type="checkbox" id="filterPeriodeHht" />
+            <span>Hanya periode HHT</span>
+          </label>
           <label class="check-toggle">
             <input type="checkbox" id="filterInkonsisten" />
             <span>Hanya inkonsisten</span>

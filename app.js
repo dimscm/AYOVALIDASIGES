@@ -925,6 +925,10 @@
     const smAll = $("filterSalesmanAll"); if (smAll) smAll.checked = true;
     const smLabel = $("filterSalesmanLabel"); if (smLabel) smLabel.textContent = "Semua salesman";
     const sSearch = $("filterSalesmanSearch"); if (sSearch) sSearch.value = "";
+    document.querySelectorAll(".filterPeriodeItem").forEach((c) => (c.checked = false));
+    const pdAll = $("filterPeriodeAll"); if (pdAll) pdAll.checked = true;
+    const pdLabel = $("filterPeriodeLabel"); if (pdLabel) pdLabel.textContent = "Semua periode";
+    if ($("rowPeriodeHht")) $("rowPeriodeHht").classList.add("hidden");
     document.querySelectorAll(".filterRayonItem").forEach((c) => (c.checked = false));
     const ryAll = $("filterRayonAll"); if (ryAll) ryAll.checked = true;
     const ryLabel = $("filterRayonLabel"); if (ryLabel) ryLabel.textContent = "Semua rayon";
@@ -1044,7 +1048,17 @@
         // Alasan boleh dipinjam dari tanggal lain (ditandai di tabel). Status scan
         // dan kategori TIDAK — itu bukti kunjungan hari itu, tidak boleh dipinjam.
         const alasanLuar = hht ? null : (state.alasanByOutlet.get(r.custno) || null);
-        return { ...r, hht, hhtNote, alasanLuar, dmp, category: cat, namaTokoEff, salesmanEff, alamatEff, rayonEff, cycleEff };
+        // Kunjungan yang tanggalnya sama sekali tidak ada di file HHT bukan
+        // "tidak scan" — statusnya tidak diketahui. Ditandai supaya bisa
+        // dikeluarkan dari ringkasan, karena kalau ikut dihitung angka
+        // "Tidak scan" jadi besar bukan karena temuan lapangan, tapi karena
+        // filenya beda periode.
+        const diLuarHht = !!(state.hhtFile && pakaiTanggal && tgl && !hhtTanggalSet.has(tgl));
+        // Periode dipakai untuk filter. Kalau kolomnya kosong, bulan dari
+        // tanggal kunjungan jadi penggantinya.
+        const periodeEff = String(r.periode ?? "").trim() || (tgl ? "Bulan " + tgl.split("-")[1] : "");
+        return { ...r, hht, hhtNote, alasanLuar, dmp, category: cat, namaTokoEff, salesmanEff,
+                 alamatEff, rayonEff, cycleEff, diLuarHht, periodeEff };
       });
 
       // Consistency per outlet: bandingkan semua kunjungan outlet yang sama.
@@ -1079,6 +1093,24 @@
           return ta - tb || a.localeCompare(b, "id", { numeric: true });
         });
       populateRayon(rayons);
+      const periodes = [...new Set(results.map((r) => r.periodeEff).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, "id", { numeric: true }));
+      populatePeriode(periodes);
+
+      // Kalau EDI mencakup tanggal yang tidak ada di HHT, kunjungan itu
+      // dikeluarkan lebih dulu dari ringkasan — bukan disembunyikan diam-diam,
+      // tapi dengan tombol yang terlihat dan keterangan berapa yang dikeluarkan.
+      const diLuar = results.filter((r) => r.diLuarHht).length;
+      // Kalau SEMUA kunjungan di luar periode HHT (dua file yang benar-benar
+      // beda periode), tombol ini justru akan mengosongkan seluruh tabel.
+      // Untuk kasus itu sudah ada peringatan tersendiri, jadi tombolnya tidak
+      // ditawarkan sama sekali.
+      const bisaDisaring = diLuar > 0 && diLuar < results.length;
+      const kotakHht = $("rowPeriodeHht");
+      if (kotakHht) {
+        kotakHht.classList.toggle("hidden", !bisaDisaring);
+        $("filterPeriodeHht").checked = bisaDisaring;
+      }
       applyFilters();
       $("resultSection").classList.remove("hidden");
       const msg = [`${results.length.toLocaleString("id-ID")} kunjungan`];
@@ -1123,6 +1155,28 @@
                     + `(${dipinjam.toLocaleString("id-ID")} baris, ditandai tanggal asalnya) sebagai petunjuk.`
                   : ""),
           };
+        } else if (pakaiTanggal && bisaDisaring) {
+          // Irisannya ada, tapi tidak semua. Ini yang bikin angka "Tidak scan"
+          // membengkak tanpa sebab lapangan: kunjungan di bulan yang HHT-nya
+          // tidak diupload ikut terhitung tidak scan.
+          const rapi = (set) => [...set].sort((a, b) => {
+            const [da, ma] = a.split("-"), [db, mb] = b.split("-");
+            return (ma + da).localeCompare(mb + db);
+          });
+          const rentang = (set) => {
+            const v = rapi(set);
+            return v.length === 1 ? v[0] : `${v[0]} s/d ${v[v.length - 1]}`;
+          };
+          state.periodeWarn = {
+            info: true,
+            ringkas: `HHT hanya berisi tanggal ${rentang(hhtTanggalSet)}, sedangkan EDI berisi `
+              + `${rentang(ediTgl)}. ${diLuar.toLocaleString("id-ID")} kunjungan di luar periode HHT `
+              + `tidak ikut dihitung.`,
+            detail: `Tanpa itu, kunjungan bulan yang HHT-nya belum diupload akan terhitung `
+              + `"Tidak scan" — bukan karena barcodenya tidak discan, tapi karena datanya memang `
+              + `belum ada. Hilangkan centang "Hanya periode HHT" di bawah kalau ingin melihat `
+              + `semua kunjungan, atau upload HHT periode yang sama supaya semuanya bisa dinilai.`,
+          };
         } else {
           state.periodeWarn = "";
         }
@@ -1133,8 +1187,10 @@
       const wb = $("d1Warn");
       if (wb) {
         const w = state.periodeWarn;
+        wb.classList.toggle("info", !!(w && w.info));
         wb.innerHTML = w
-          ? `<b>Periode EDI dan HHT tidak bertemu.</b> ${escapeHtml(w.ringkas)}`
+          ? `<b>${w.info ? "Periode EDI dan HHT tidak sama panjang."
+                         : "Periode EDI dan HHT tidak bertemu."}</b> ${escapeHtml(w.ringkas)}`
             + (w.detail ? `<details class="warn-more"><summary>Kenapa?</summary>`
                           + `<p>${escapeHtml(w.detail)}</p></details>` : "")
           : "";
@@ -1186,6 +1242,11 @@
       .filter((c) => c.checked).map((c) => c.value));
   }
 
+  function getSelectedPeriode() {
+    return new Set([...document.querySelectorAll(".filterPeriodeItem")]
+      .filter((c) => c.checked).map((c) => c.value));
+  }
+
   function getSelectedRayon() {
     return new Set([...document.querySelectorAll(".filterRayonItem")]
       .filter((c) => c.checked).map((c) => c.value));
@@ -1199,7 +1260,11 @@
     const rys = getSelectedRayon();
     const onlyMixed = $("filterInkonsisten") && $("filterInkonsisten").checked;
     const kel = $("filterTitik") ? $("filterTitik").value : "";
+    const hanyaHht = $("filterPeriodeHht") && $("filterPeriodeHht").checked;
+    const pers = getSelectedPeriode();
     return state.results.filter((r) => {
+      if (hanyaHht && r.diLuarHht) return false;
+      if (pers.size > 0 && !pers.has(r.periodeEff)) return false;
       if (onlyMixed && r.consistency !== "MIXED") return false;
       if (kel) {
         // Kelompok ini soal kunjungan yang bermasalah. Kunjungan flag 1 di
@@ -1401,6 +1466,24 @@
   const ryCtrl = wireMulti("filterRayon", "filterRayonBtn", "filterRayonMenu",
     "filterRayonAll", "filterRayonItem", "filterRayonLabel", "rayon");
 
+  const pdCtrl = wireMulti("filterPeriode", "filterPeriodeBtn", "filterPeriodeMenu",
+    "filterPeriodeAll", "filterPeriodeItem", "filterPeriodeLabel", "periode");
+
+  function populatePeriode(names) {
+    const list = $("filterPeriodeList");
+    if (!list) return;
+    list.innerHTML = names.map((n) => {
+      const safe = escapeHtml(n);
+      return `<label class="multi-opt"><input type="checkbox" value="${safe}" class="filterPeriodeItem" /> ${safe}</label>`;
+    }).join("");
+    list.querySelectorAll(".filterPeriodeItem").forEach((c) => {
+      c.addEventListener("change", () => { pdCtrl.updateLabel(); applyFilters(); });
+    });
+    pdCtrl.updateLabel();
+    // Kalau datanya cuma satu periode, filternya tidak ada gunanya — disembunyikan.
+    $("filterPeriode").classList.toggle("hidden", names.length < 2);
+  }
+
   function populateRayon(names) {
     const list = $("filterRayonList");
     list.innerHTML = names.map((n) => {
@@ -1433,6 +1516,7 @@
     });
   });
   if ($("filterTitik")) $("filterTitik").addEventListener("change", applyFilters);
+  if ($("filterPeriodeHht")) $("filterPeriodeHht").addEventListener("change", applyFilters);
   $("prevPage").addEventListener("click", () => { if (state.page > 1) { state.page--; renderTable(); } });
   $("nextPage").addEventListener("click", () => { state.page++; renderTable(); });
 
