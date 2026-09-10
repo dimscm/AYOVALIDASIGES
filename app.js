@@ -8,6 +8,7 @@
     results: [],
     filtered: [],
     titikByOutlet: new Map(),
+    barcodeByOutlet: new Map(),
     page: 1,
     pageSize: 100,
   };
@@ -939,6 +940,9 @@
     state.titikByOutlet = new Map();
     state.titikStats = null;
     if ($("filterTitik")) { $("filterTitik").value = ""; labelTitikFilter(); }
+    state.barcodeByOutlet = new Map();
+    state.barcodeStats = null;
+    if ($("filterBarcode")) { $("filterBarcode").value = ""; labelBarcodeFilter(); }
     $("resultSection").classList.add("hidden");
     $("uploadCard").classList.remove("hidden");
     $("loadedBar").classList.add("hidden");
@@ -1124,6 +1128,7 @@
         for (const v of visits) { v.consistency = key; v.visitCount = visits.length; }
       }
       state.results = results;
+      hitungBarcode();
       hitungTitik();
 
       const salesmen = [...new Set(results.map((r) => r.salesmanEff).filter(Boolean))].sort();
@@ -1326,6 +1331,11 @@
       if (hanyaHht && r.diLuarHht) return false;
       if (pers.size > 0 && !pers.has(r.periodeEff)) return false;
       if (onlyMixed && r.consistency !== "MIXED") return false;
+      const bc = $("filterBarcode") ? $("filterBarcode").value : "";
+      if (bc) {
+        const u = state.barcodeByOutlet && state.barcodeByOutlet.get(r.custno);
+        if (!u || u.bucket !== bc) return false;
+      }
       if (kel) {
         // Kelompok ini soal kunjungan yang bermasalah. Kunjungan flag 1 di
         // outlet yang sama tidak ada urusannya, jadi tidak ikut ditampilkan.
@@ -1394,6 +1404,11 @@
         + `di luar tanggal HHT)`);
     }
     if ($("filterInkonsisten") && $("filterInkonsisten").checked) aktif.push("hanya inkonsisten");
+    const bcv = $("filterBarcode") ? $("filterBarcode").value : "";
+    if (bcv) {
+      const nama = $("filterBarcode").selectedOptions[0].textContent.replace(/\s*\(.*\)$/, "");
+      aktif.push(`barcode "${nama.trim()}"`);
+    }
     const kel = $("filterTitik") ? $("filterTitik").value : "";
     if (kel) {
       const nama = $("filterTitik").selectedOptions[0].textContent.replace(/\s*\(.*\)$/, "");
@@ -1428,6 +1443,7 @@
     if ($("filterPeriodeHht")) $("filterPeriodeHht").checked = false;
     if ($("filterInkonsisten")) $("filterInkonsisten").checked = false;
     if ($("filterTitik")) $("filterTitik").value = "";
+    if ($("filterBarcode")) $("filterBarcode").value = "";
     if ($("tglDari")) $("tglDari").value = "";
     if ($("tglSampai")) $("tglSampai").value = "";
     hitungTitik();
@@ -1485,6 +1501,7 @@
         <td class="col-x mono">${dist}</td>
         <td class="titik">${dup ? "" : titikSel(r)}</td>
         <td class="mono">${hhtCell}</td>
+        <td class="barcode">${dup ? "" : barcodeSel(r)}</td>
         <td>${alasanSel(r)}</td>
         <td class="col-x">${escapeHtml(r.alorReason || "")}</td>
         <td>${escapeHtml(info.suggest)}</td>
@@ -1492,7 +1509,7 @@
     }).join("");
 
     if (!slice.length) {
-      tbody.innerHTML = `<tr><td colspan="18" class="empty">Tidak ada baris yang cocok dengan filter ini.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="19" class="empty">Tidak ada baris yang cocok dengan filter ini.</td></tr>`;
     }
 
     stampLabels(document.getElementById("resultTable"));
@@ -1657,6 +1674,7 @@
     });
   });
   if ($("filterTitik")) $("filterTitik").addEventListener("change", applyFilters);
+  if ($("filterBarcode")) $("filterBarcode").addEventListener("change", applyFilters);
   if ($("filterPeriodeHht")) $("filterPeriodeHht").addEventListener("change", applyFilters);
   // Rentang tanggal juga menentukan penilaian titik: kunjungan lama sering
   // bermasalah karena titik masternya memang belum diperbaiki waktu itu.
@@ -1683,8 +1701,8 @@
     "Nama Toko", "Salesman", "Salesman DMP", "Rayon (Team)", "Cycle", "Alamat Toko", "Visit Date",
     "Jam Masuk", "Jam Keluar", "Flag Radius", "Distance", "Lat Visit", "Long Visit",
     "Lat Val", "Long Val", "HHT", "Tipe Scan", "Alasan HHT", "Alasan Dari Tanggal",
-    "Alor Reason", "Saran", "Titik Toko", "Lat Usulan", "Long Usulan", "Keyakinan Usulan",
-    "Catatan Usulan"];
+    "Alor Reason", "Saran", "Barcode", "Kunjungan Discan", "Alasan Terakhir",
+    "Titik Toko", "Lat Usulan", "Long Usulan", "Keyakinan Usulan", "Catatan Usulan"];
 
   const TITIK_TEKS = {
     USUL: "Perlu diperbaiki",
@@ -1708,6 +1726,7 @@
     const info = CATEGORY_INFO[r.category];
     const cons = CONSISTENCY_INFO[r.consistency] || CONSISTENCY_INFO.SINGLE;
     const u = state.titikByOutlet && state.titikByOutlet.get(r.custno);
+    const bc = state.barcodeByOutlet && state.barcodeByOutlet.get(r.custno);
     // Keterangannya di satu kolom, koordinatnya di kolom sendiri-sendiri —
     // supaya angkanya tinggal disalin ke master, tidak perlu dipotong dulu
     // dari tengah kalimat.
@@ -1723,7 +1742,10 @@
       r.hht ? (r.hht.hht || "") : "", r.hht ? (r.hht.tipeScan || "") : "",
       alasanHht(r) || (r.alasanLuar ? r.alasanLuar.alasan : ""),
       alasanHht(r) ? "" : (r.alasanLuar ? (r.alasanLuar.tgl || "tanggal lain") : ""),
-      r.alorReason || "", info.suggest, titik,
+      r.alorReason || "", info.suggest,
+      bc ? BARCODE_INFO[bc.bucket].label : "",
+      bc ? `${bc.scan} dari ${bc.n}` : "", bc ? bc.alasan : "",
+      titik,
       adaUsulan ? koordTeks(u.mLat) : "", adaUsulan ? koordTeks(u.mLon) : "",
       adaUsulan ? u.yakin : "", u ? catatanUsulan(u) : "",
     ];
@@ -1826,6 +1848,36 @@
     return ws;
   }
 
+  // Daftar kerja barcode: satu baris per outlet, hanya yang perlu ditindaklanjuti.
+  // Yang sudah beres sendiri sengaja tidak ikut — itu justru inti gunanya.
+  function daftarBarcode() {
+    if (!state.barcodeByOutlet || !state.barcodeByOutlet.size) return [];
+    const sudah = new Set(), keluar = [];
+    for (const r of state.filtered) {
+      const u = state.barcodeByOutlet.get(r.custno);
+      if (!u || (u.bucket !== "BARU" && u.bucket !== "BELUM") || sudah.has(r.custno)) continue;
+      sudah.add(r.custno);
+      keluar.push({
+        Keadaan: BARCODE_INFO[u.bucket].label,
+        "Kode Outlet": r.custno,
+        "Nama Toko": r.namaTokoEff,
+        Salesman: r.salesmanEff,
+        Rayon: r.rayonEff,
+        "Alamat (DMP)": r.alamatEff || "",
+        "Kunjungan Discan": `${u.scan} dari ${u.n}`,
+        "Jumlah Kunjungan": u.n,
+        "Kunjungan Terakhir": u.tglAkhir,
+        "Alasan Terakhir": u.alasan,
+      });
+    }
+    // Yang belum pernah discan didahulukan, lalu yang paling sering dikunjungi
+    // — makin sering didatangi, makin sering pula kegagalannya terulang.
+    const urut = { "Belum pernah discan": 0, "Baru bermasalah": 1 };
+    keluar.sort((a, b) => urut[a.Keadaan] - urut[b.Keadaan]
+      || b["Jumlah Kunjungan"] - a["Jumlah Kunjungan"]);
+    return keluar;
+  }
+
   $("exportBtn").addEventListener("click", async () => {
     if (!state.filtered.length) return;
     const btn = $("exportBtn");
@@ -1858,6 +1910,9 @@
         const usulan = daftarUsulan();
         if (usulan.length)
           XLSX.utils.book_append_sheet(wb, sheetUsulan(usulan), "Usulan Titik");
+        const barcode = daftarBarcode();
+        if (barcode.length)
+          XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(barcode), "Barcode Perlu Dicek");
         // Lewat unduh(), bukan XLSX.writeFile: writeFile membuat tautan
         // unduhannya sendiri, dan tautan itu mati di dalam artifact.
         const buf = XLSX.write(wb, { type: "array", bookType: "xlsx" });
@@ -2103,6 +2158,93 @@
       if (isi.length > isiTerbaik) { isiTerbaik = isi.length; terbaik = isi; }
     }
     return terbaik && terbaik.length ? terbaik : vs;
+  }
+
+  // ================= Riwayat scan barcode per outlet =================
+  // Satu baris di tabel adalah satu kunjungan, tapi pertanyaan "barcodenya
+  // bermasalah atau tidak" hanya bisa dijawab dengan melihat seluruh riwayat
+  // outlet itu. Salesman datang seminggu atau dua minggu sekali: minggu lalu
+  // bisa saja gagal karena barcode belum aktif, minggu ini sudah berhasil.
+  // Yang menentukan adalah KUNJUNGAN TERAKHIR — sisanya cerita latar.
+  const BARCODE_INFO = {
+    LANCAR: { label: "Barcode lancar", tone: "ok",
+      hint: "Kunjungan terakhir barcodenya berhasil discan. Tidak ada yang perlu dikerjakan." },
+    BERES: { label: "Sudah beres", tone: "info",
+      hint: "Dulu pernah gagal discan, tapi kunjungan terakhir sudah berhasil — barcodenya sudah aktif atau sudah diganti. Tidak perlu ditindaklanjuti lagi." },
+    BARU: { label: "Baru bermasalah", tone: "warn",
+      hint: "Dulu barcodenya bisa discan, tapi kunjungan terakhir gagal. Kemungkinan barcodenya baru rusak, hilang, atau tertutup barang." },
+    BELUM: { label: "Belum pernah discan", tone: "bad",
+      hint: "Tidak sekali pun berhasil discan sejak periode ini. Barcodenya perlu dipasang, diganti, atau diaktifkan." },
+  };
+
+  function hitungBarcode() {
+    const per = new Map();
+    for (const h of state.hhtRows || []) {
+      const c = String(h.custno || "").trim();
+      if (!c) continue;
+      let v = per.get(c);
+      if (!v) { v = []; per.set(c, v); }
+      v.push({
+        iso: tglIso(h.tanggal) || "",
+        tgl: String(h.tanggal || "").trim(),
+        scan: isScanned(h),
+        alasan: String(h.alasan || "").trim(),
+      });
+    }
+
+    const info = new Map();
+    const jml = { LANCAR: 0, BERES: 0, BARU: 0, BELUM: 0 };
+    for (const [custno, vs] of per) {
+      vs.sort((a, b) => String(a.iso).localeCompare(String(b.iso)));
+      const akhir = vs[vs.length - 1];
+      const pernahScan = vs.some((v) => v.scan);
+      const pernahGagal = vs.some((v) => !v.scan);
+      let bucket;
+      if (akhir.scan) bucket = pernahGagal ? "BERES" : "LANCAR";
+      else bucket = pernahScan ? "BARU" : "BELUM";
+      info.set(custno, {
+        bucket, n: vs.length,
+        scan: vs.filter((v) => v.scan).length,
+        tglAkhir: akhir.tgl,
+        alasan: akhir.scan ? "" : (akhir.alasan && akhir.alasan !== "-" ? akhir.alasan : ""),
+      });
+      jml[bucket]++;
+    }
+    state.barcodeByOutlet = info;
+    state.barcodeStats = jml;
+    labelBarcodeFilter();
+  }
+
+  function labelBarcodeFilter() {
+    const sel = $("filterBarcode");
+    if (!sel) return;
+    const j = state.barcodeStats || { LANCAR: 0, BERES: 0, BARU: 0, BELUM: 0 };
+    const n = (x) => (x || 0).toLocaleString("id-ID");
+    const teks = {
+      "": "Semua barcode",
+      BARU: `Baru bermasalah (${n(j.BARU)})`,
+      BELUM: `Belum pernah discan (${n(j.BELUM)})`,
+      BERES: `Sudah beres (${n(j.BERES)})`,
+      LANCAR: `Barcode lancar (${n(j.LANCAR)})`,
+    };
+    for (const o of sel.options) if (teks[o.value] !== undefined) o.textContent = teks[o.value];
+    // Tanpa file HHT tidak ada riwayat scan sama sekali, jadi penyaringnya
+    // disembunyikan daripada memajang pilihan yang semuanya nol.
+    sel.classList.toggle("hidden", !state.hhtFile);
+  }
+
+  function barcodeSel(r) {
+    const u = state.barcodeByOutlet ? state.barcodeByOutlet.get(r.custno) : null;
+    if (!u) return "";
+    const info = BARCODE_INFO[u.bucket];
+    const rinci = u.bucket === "LANCAR"
+      ? `${u.n} kunjungan, semuanya discan`
+      : u.bucket === "BERES"
+        ? `${u.scan} dari ${u.n} kunjungan discan, terakhir ${escapeHtml(u.tglAkhir)} berhasil`
+        : `${u.scan} dari ${u.n} kunjungan discan, terakhir ${escapeHtml(u.tglAkhir)} gagal`
+          + (u.alasan ? ` &middot; ${escapeHtml(u.alasan)}` : "");
+    return `<span class="tag tag-bc-${u.bucket}" title="${escapeHtml(info.hint)}">${info.label}</span>`
+      + `<span class="titik-sub">${rinci}</span>`;
   }
 
   function hitungTitik() {

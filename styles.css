@@ -322,6 +322,14 @@ body.full-cols .col-x { display: table-cell; }
   border-radius: 0 5px 5px 0;
 }
 
+/* Riwayat scan barcode per outlet. Warnanya mengikuti tindakan yang perlu
+   diambil, bukan sekadar bagus/jelek: biru berarti sudah selesai sendiri. */
+.barcode { min-width: 175px; }
+.tag-bc-LANCAR { background: var(--ok-bg);   color: var(--ok); }
+.tag-bc-BERES  { background: var(--info-bg); color: var(--info); }
+.tag-bc-BARU   { background: var(--warn-bg); color: var(--warn); }
+.tag-bc-BELUM  { background: var(--bad-bg);  color: var(--bad); }
+
 /* Pemegang outlet di DMP yang berbeda dengan yang berkunjung. */
 .sls-beda { color: var(--warn); }
 
@@ -569,12 +577,14 @@ tr.row-dup .dupcell { visibility: hidden; }
   /* Kolom "Titik Toko" isinya beberapa baris. Kalau dipaksa berdampingan dengan
      labelnya, sisa lebarnya cuma sepertiga layar dan tiap kata patah sendiri.
      Di kartu, labelnya ditaruh di atas dan isinya memakai lebar penuh. */
-  .table-wrap td.titik { display: block; }
-  .table-wrap td.titik::before { display: block; flex: none; margin-bottom: 3px; }
-  .table-wrap td.titik .titik-sub { margin-top: 2px; }
+  .table-wrap td.titik, .table-wrap td.barcode { display: block; }
+  .table-wrap td.titik::before, .table-wrap td.barcode::before {
+    display: block; flex: none; margin-bottom: 3px;
+  }
+  .table-wrap td.titik .titik-sub, .table-wrap td.barcode .titik-sub { margin-top: 2px; }
   /* Aturan td:empty di atas kalah spesifik dari .titik, jadi disebut lagi —
      kalau tidak, kartu kunjungan berulang menyisakan label tanpa isi. */
-  .table-wrap td.titik:empty { display: none; }
+  .table-wrap td.titik:empty, .table-wrap td.barcode:empty { display: none; }
 
   /* Baris "tidak ada hasil" tidak perlu berlabel. */
   .table-wrap td.empty { display: block; text-align: center; padding: 20px 12px; }

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>M3 Beverage Mayora</title>
-  <link rel="stylesheet" href="styles.css?v=40" />
+  <link rel="stylesheet" href="styles.css?v=41" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23c8102e'/%3E%3Ctext x='50' y='62' font-size='34' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EM3%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -117,6 +117,26 @@
               <div class="h-item info"><b>Blank + Scan</b><span>Barcode sudah discan tapi belum tervalidasi. Solusi: scan = validasi.</span></div>
               <div class="h-item bad"><b>Blank + Tidak scan</b><span>Toko tidak ada / tidak ketemu.</span></div>
             </div>
+            <p class="hnote"><b>Kolom "Barcode"</b> menjawab pertanyaan: barcode outlet ini
+              bermasalah atau tidak? Satu baris di tabel adalah satu kunjungan, tapi barcode hanya
+              bisa dinilai dari seluruh riwayat outletnya. Salesman datang seminggu atau dua minggu
+              sekali — minggu lalu bisa saja gagal karena barcodenya belum aktif, minggu ini sudah
+              berhasil. Jadi yang menentukan <b>kunjungan terakhir</b>, sisanya cerita latar:</p>
+            <div class="hgrid">
+              <div class="h-item ok"><b>Barcode lancar</b><span>Kunjungan terakhir berhasil discan, tidak pernah gagal. Tidak ada yang perlu dikerjakan.</span></div>
+              <div class="h-item info"><b>Sudah beres</b><span>Dulu pernah gagal, kunjungan terakhir sudah berhasil — barcodenya sudah aktif atau sudah diganti. Tidak perlu dikejar lagi.</span></div>
+              <div class="h-item warn"><b>Baru bermasalah</b><span>Dulu bisa discan, kunjungan terakhir gagal. Kemungkinan barcodenya baru rusak, hilang, atau tertutup barang.</span></div>
+              <div class="h-item bad"><b>Belum pernah discan</b><span>Tidak sekali pun berhasil di periode ini. Barcodenya perlu dipasang, diganti, atau diaktifkan.</span></div>
+            </div>
+            <p class="hnote">Di bawah lencananya tertulis berapa kunjungan yang berhasil discan,
+              tanggal kunjungan terakhir, dan alasannya kalau gagal (B1-Rusak, B2-Hilang,
+              B7-Brc Belum Aktif, dan sebagainya). Pakai dropdown <b>"Semua barcode"</b> untuk
+              melihat satu kelompok saja. Tombol <b>Export Excel</b> ikut memberi sheet
+              <b>Barcode Perlu Dicek</b> — satu baris per outlet, hanya yang <i>baru bermasalah</i>
+              dan <i>belum pernah discan</i>. Yang sudah beres sendiri sengaja tidak ikut, supaya
+              tidak ada yang mengejar barcode yang sebenarnya sudah aktif.
+              Catatan: <b>M</b> pada kolom Scan berarti input manual — barcodenya tidak discan,
+              jadi dihitung sebagai gagal, bukan berhasil.</p>
             <p class="hnote"><b>Kolom "Titik Toko"</b> menjawab pertanyaan: kalau flag-nya 0 atau blank, yang salah
               salesmannya atau titik tokonya? Kalau kunjungan berkali-kali jatuh di tempat yang sama
               tapi jauh dari titik toko di master, yang patut dicurigai titik tokonya —
@@ -217,6 +237,14 @@
               <div id="filterPeriodeList"></div>
             </div>
           </div>
+          <select id="filterBarcode" class="hidden"
+                  title="Saring berdasarkan riwayat scan barcode di outlet">
+            <option value="">Semua barcode</option>
+            <option value="BARU">Baru bermasalah</option>
+            <option value="BELUM">Belum pernah discan</option>
+            <option value="BERES">Sudah beres</option>
+            <option value="LANCAR">Barcode lancar</option>
+          </select>
           <select id="filterTitik" title="Saring berdasarkan kondisi titik lokasi toko">
             <option value="">Semua outlet</option>
             <option value="KEMBALI">Titik toko diubah — kembalikan yang lama</option>
@@ -270,6 +298,7 @@
                 <th class="col-x">Distance</th>
                 <th>Titik Toko</th>
                 <th>Scan</th>
+                <th>Barcode</th>
                 <th>Alasan Tidak Scan</th>
                 <th class="col-x">Alor Reason</th>
                 <th>Saran</th>
@@ -418,13 +447,13 @@
       </section>
     </div>
 
-    <p class="credit">dimscm &middot; v40</p>
+    <p class="credit">dimscm &middot; v41</p>
   </main>
 
   <script src="vendor/xlsx.full.min.js"></script>
   <script src="vendor/jszip.min.js"></script>
   <script src="vendor/7zz.umd.js"></script>
-  <script src="app.js?v=40"></script>
-  <script src="dash2.js?v=40"></script>
+  <script src="app.js?v=41"></script>
+  <script src="dash2.js?v=41"></script>
 </body>
 </html>
