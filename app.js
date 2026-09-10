@@ -1069,7 +1069,18 @@
         const cat = categorize(r, hht);
         // Sumber: DMP (paling akurat) > HHT > EDI. Fallback kalau kosong.
         const namaTokoEff = (dmp && dmp.namaOutlet) || (hht && hht.namaToko && String(hht.namaToko).trim()) || r.namaToko || "";
-        const salesmanEff = (dmp && dmp.salesman) || (hht && hht.salesman && String(hht.salesman).trim()) || r.slsname || "";
+        // Siapa yang berkunjung, bukan siapa pemilik outletnya. Dulu nama ini
+        // diambil dari DMP lebih dulu — akibatnya kunjungan nyata bisa
+        // diatasnamakan rayon kosong ("VACANT") atau salesman lain yang
+        // kebetulan memegang outlet itu di master. Di data uji, 8,3% kunjungan
+        // salah orang karena itu. Untuk dashboard validasi kunjungan, yang
+        // benar SLSNAME di EDI: dialah yang datang dan yang dinilai radiusnya.
+        const salesmanEff = String(r.slsname || "").trim()
+          || (hht && hht.salesman && String(hht.salesman).trim())
+          || (dmp && dmp.salesman) || "";
+        // Pemegang outlet menurut DMP tetap disimpan, ditampilkan di kolom
+        // terpisah — berguna justru untuk melihat ketidakcocokannya.
+        const salesmanDmp = (dmp && dmp.salesman) || "";
         const alamatEff = (dmp && dmp.alamat) || r.alamatToko || "";
         // Rayon diambil dari DMP. Kalau outletnya tidak ada di DMP, yang tersedia
         // hanya kolom TEAM di EDI — isinya nama tim ("288 - COF+HF+IF+HC"), bukan
@@ -1089,7 +1100,8 @@
         // tanggal kunjungan jadi penggantinya.
         const periodeEff = String(r.periode ?? "").trim() || (tgl ? "Bulan " + tgl.split("-")[1] : "");
         return { ...r, hht, hhtNote, alasanLuar, dmp, category: cat, namaTokoEff, salesmanEff,
-                 alamatEff, rayonEff, cycleEff, diLuarHht, periodeEff, tglIso: tglIso(r.visitDate) };
+                 salesmanDmp, alamatEff, rayonEff, cycleEff, diLuarHht, periodeEff,
+                 tglIso: tglIso(r.visitDate) };
       });
 
       // Consistency per outlet: bandingkan semua kunjungan outlet yang sama.
@@ -1324,7 +1336,7 @@
       if (sms.size > 0 && !sms.has(r.salesmanEff)) return false;
       if (rys.size > 0 && !rys.has(r.rayonEff)) return false;
       if (q) {
-        const hay = [r.custno, r.namaTokoEff, r.salesmanEff, r.rayonEff, r.alamatEff, r.alorReason,
+        const hay = [r.custno, r.namaTokoEff, r.salesmanEff, r.salesmanDmp, r.rayonEff, r.alamatEff, r.alorReason,
                      alasanHht(r), r.alasanLuar && r.alasanLuar.alasan]
           .map((x) => String(x || "").toLowerCase()).join(" ");
         if (!hay.includes(q)) return false;
@@ -1447,6 +1459,12 @@
       const nomor = escapeHtml(r.custno);
       const nama = escapeHtml(r.namaTokoEff);
       const sls = escapeHtml(r.salesmanEff);
+      // Ditandai kalau pemegang outlet di DMP bukan orang yang berkunjung —
+      // itu sendiri temuan: rayon kosong, atau outlet sudah pindah tangan.
+      const beda = r.salesmanDmp && r.salesmanDmp !== r.salesmanEff;
+      const slsDmp = r.salesmanDmp
+        ? `<span class="${beda ? "sls-beda" : ""}"${beda ? ' title="Pemegang outlet di DMP berbeda dengan yang berkunjung"' : ""}>${escapeHtml(r.salesmanDmp)}</span>`
+        : "";
       const rayon = escapeHtml(r.rayonEff);
       const cycle = escapeHtml(r.cycleEff);
       const consTag = `<span class="tag-cons cons-${r.consistency}" title="${escapeHtml(cons.hint)}">${escapeHtml(consLabel)}</span>`;
@@ -1457,6 +1475,7 @@
         <td class="mono${dup ? " dupcell" : ""}">${nomor}</td>
         <td class="${dup ? "dupcell" : ""}">${nama}</td>
         <td class="${dup ? "dupcell" : ""}">${sls}</td>
+        <td class="col-x${dup ? " dupcell" : ""}">${slsDmp}</td>
         <td class="col-x mono${dup ? " dupcell" : ""}">${rayon}</td>
         <td class="col-x${dup ? " dupcell" : ""}">${cycle}</td>
         <td class="mono">${escapeHtml(r.visitDate || "")}</td>
@@ -1473,7 +1492,7 @@
     }).join("");
 
     if (!slice.length) {
-      tbody.innerHTML = `<tr><td colspan="17" class="empty">Tidak ada baris yang cocok dengan filter ini.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="18" class="empty">Tidak ada baris yang cocok dengan filter ini.</td></tr>`;
     }
 
     stampLabels(document.getElementById("resultTable"));
@@ -1661,7 +1680,7 @@
   const BATAS_XLSX = 30000;
 
   const KEPALA_HASIL = ["Kategori", "Konsistensi", "Jumlah Kunjungan Outlet", "Kode Outlet",
-    "Nama Toko", "Salesman", "Rayon (Team)", "Cycle", "Alamat Toko", "Visit Date",
+    "Nama Toko", "Salesman", "Salesman DMP", "Rayon (Team)", "Cycle", "Alamat Toko", "Visit Date",
     "Jam Masuk", "Jam Keluar", "Flag Radius", "Distance", "Lat Visit", "Long Visit",
     "Lat Val", "Long Val", "HHT", "Tipe Scan", "Alasan HHT", "Alasan Dari Tanggal",
     "Alor Reason", "Saran", "Titik Toko", "Lat Usulan", "Long Usulan", "Keyakinan Usulan",
@@ -1697,7 +1716,7 @@
       : TITIK_TEKS[u.bucket] || "";
     const adaUsulan = u && (u.bucket === "USUL" || u.bucket === "KEMBALI");
     return [
-      info.label, cons.label, r.visitCount, r.custno, r.namaTokoEff, r.salesmanEff,
+      info.label, cons.label, r.visitCount, r.custno, r.namaTokoEff, r.salesmanEff, r.salesmanDmp,
       r.rayonEff, r.cycleEff, r.alamatEff, r.visitDate || "", r.jamin || "", r.jamout || "",
       r.flagRadius || "BLANK", r.distance ?? "", r.latVisit ?? "", r.longVisit ?? "",
       r.latVal ?? "", r.longVal ?? "",
@@ -2312,6 +2331,7 @@
       "Kode Outlet": custno,
       "Nama Toko": r.namaTokoEff,
       Salesman: r.salesmanEff,
+      "Salesman DMP": r.salesmanDmp || "",
       Rayon: r.rayonEff,
       "Alamat (DMP)": r.alamatEff || "",
       Keyakinan: u.yakin,

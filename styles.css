@@ -322,6 +322,9 @@ body.full-cols .col-x { display: table-cell; }
   border-radius: 0 5px 5px 0;
 }
 
+/* Pemegang outlet di DMP yang berbeda dengan yang berkunjung. */
+.sls-beda { color: var(--warn); }
+
 /* Kolom "Titik Toko" di tabel Detail */
 /* Usulan ditulis sekali per outlet, jadi selnya dibiarkan benar-benar kosong
    pada baris kunjungan berikutnya — bukan disembunyikan, supaya barisnya tidak
