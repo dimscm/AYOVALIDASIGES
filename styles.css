@@ -623,3 +623,49 @@ tr.row-dup .dupcell { visibility: hidden; }
 /* Angka utama tidak boleh terpotong ke baris baru — satuannya ("M", "jt")
    harus tetap menempel supaya besarannya terbaca sekali lihat. */
 .stat b { white-space: nowrap; }
+
+
+/* ============ Lembar cetak per salesman ============
+   Dibuat untuk dicetak di kertas dan dibawa ke lapangan: satu halaman per
+   salesman, angka seperlunya, dan kolom kosong untuk ditulis tangan. Di layar
+   blok ini tidak pernah terlihat; browser sendiri yang mengubahnya jadi PDF
+   lewat Print - Simpan sebagai PDF, jadi tidak perlu pustaka tambahan dan
+   hurufnya tetap bisa dicari. */
+#cetak { display: none; }
+
+@media print {
+  /* Yang dicetak hanya lembar ini. */
+  body > *:not(#cetak) { display: none !important; }
+  #cetak { display: block !important; }
+  @page { size: A4 portrait; margin: 12mm 10mm; }
+  body { background: #fff; font-size: 10pt; color: #000; }
+
+  .cetak-sls { page-break-after: always; }
+  .cetak-sls:last-child { page-break-after: auto; }
+
+  .cetak-kop { border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 10px; }
+  .cetak-kop h2 { margin: 0 0 2px; font-size: 13pt; }
+  .cetak-kop .sub { font-size: 9pt; color: #333; }
+  .cetak-kop .jml { float: right; font-size: 11pt; font-weight: 700; }
+
+  #cetak table { width: 100%; border-collapse: collapse; font-size: 9pt; }
+  #cetak th, #cetak td {
+    border: 1px solid #999; padding: 4px 5px; text-align: left;
+    vertical-align: top; page-break-inside: avoid;
+  }
+  #cetak th { background: #eee; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .02em; }
+  /* Judul kolom ikut tercetak lagi di tiap halaman kalau daftarnya panjang —
+     tanpa ini, halaman kedua dan seterusnya jadi kolom tanpa nama. */
+  #cetak thead { display: table-header-group; }
+  #cetak tbody tr { page-break-inside: avoid; }
+  #cetak .no { width: 22px; text-align: right; }
+  #cetak .kode { width: 62px; font-family: monospace; }
+  #cetak .isian { width: 90px; }
+  #cetak .kecil { display: block; font-size: 8pt; color: #444; }
+  #cetak .berat { font-weight: 700; }
+
+  .cetak-ttd { margin-top: 14px; font-size: 9pt; display: flex; gap: 40px; }
+  .cetak-ttd div { flex: 1; }
+  .cetak-ttd .garis { margin-top: 32px; border-top: 1px solid #000; padding-top: 3px; }
+  .cetak-kosong { padding: 20px; text-align: center; font-size: 11pt; }
+}

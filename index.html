@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>M3 Beverage Mayora</title>
-  <link rel="stylesheet" href="styles.css?v=41" />
+  <link rel="stylesheet" href="styles.css?v=42" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23c8102e'/%3E%3Ctext x='50' y='62' font-size='34' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EM3%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -117,6 +117,13 @@
               <div class="h-item info"><b>Blank + Scan</b><span>Barcode sudah discan tapi belum tervalidasi. Solusi: scan = validasi.</span></div>
               <div class="h-item bad"><b>Blank + Tidak scan</b><span>Toko tidak ada / tidak ketemu.</span></div>
             </div>
+            <p class="hnote"><b>Tombol "Cetak per Salesman"</b> membuat lembar kerja untuk dibawa
+              ke lapangan: <b>satu halaman per salesman</b>, berisi outletnya yang bermasalah — baik
+              soal radius maupun barcode — lengkap dengan apa yang perlu ditanyakan dan kolom kosong
+              untuk menulis jawabannya, plus tempat tanda tangan. Saring dulu rayon atau salesman
+              yang mau dicetak, baru tekan tombolnya. Di jendela cetak yang muncul, pilih
+              <b>"Simpan sebagai PDF"</b> kalau ingin filenya, atau langsung cetak ke printer.
+              Outlet yang barcodenya sudah beres sendiri tidak ikut tercetak.</p>
             <p class="hnote"><b>Kolom "Barcode"</b> menjawab pertanyaan: barcode outlet ini
               bermasalah atau tidak? Satu baris di tabel adalah satu kunjungan, tapi barcode hanya
               bisa dinilai dari seluruh riwayat outletnya. Salesman datang seminggu atau dua minggu
@@ -267,6 +274,7 @@
             <span>Detail lengkap</span>
           </label>
           <button id="exportBtn" class="ghost">Export Excel</button>
+          <button id="cetakBtn" class="ghost" title="Halaman cetak per salesman — lalu Print / Simpan sebagai PDF">Cetak per Salesman</button>
         </div>
         <div class="daterow hidden" id="rowTanggal">
           <span class="datelabel">Tanggal kunjungan</span>
@@ -447,13 +455,17 @@
       </section>
     </div>
 
-    <p class="credit">dimscm &middot; v41</p>
+    <p class="credit">dimscm &middot; v42</p>
   </main>
+
+  <!-- Lembar cetak per salesman. Disusun saat tombol Cetak ditekan, dan hanya
+       terlihat di mode cetak — lihat aturan @media print di styles.css. -->
+  <div id="cetak" aria-hidden="true"></div>
 
   <script src="vendor/xlsx.full.min.js"></script>
   <script src="vendor/jszip.min.js"></script>
   <script src="vendor/7zz.umd.js"></script>
-  <script src="app.js?v=41"></script>
-  <script src="dash2.js?v=41"></script>
+  <script src="app.js?v=42"></script>
+  <script src="dash2.js?v=42"></script>
 </body>
 </html>

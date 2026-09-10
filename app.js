@@ -1878,6 +1878,111 @@
     return keluar;
   }
 
+  // ================= Lembar cetak per salesman =================
+  // Dipakai pagi hari: cetak masalah satu rayon, bawa ke lapangan, tanyakan ke
+  // salesmannya. Karena itu isinya dipilih dari sudut pandang orang yang
+  // ditanya — apa yang terjadi di outletnya, dan apa yang perlu dipastikan —
+  // bukan istilah teknis dashboard.
+  function masalahOutlet(rows) {
+    const r = rows[0];
+    const u = state.titikByOutlet && state.titikByOutlet.get(r.custno);
+    const bc = state.barcodeByOutlet && state.barcodeByOutlet.get(r.custno);
+    const masalah = [], tanya = [];
+
+    const luar = rows.filter((x) => x.flagRadius !== "1");
+    if (luar.length) {
+      const tgl = luar.slice(-3).map((x) => String(x.visitDate || "").slice(0, 5)).filter(Boolean);
+      masalah.push(`<b class="berat">Di luar radius</b> ${luar.length}&times;`
+        + (tgl.length ? `<span class="kecil">${escapeHtml(tgl.join(", "))}</span>` : ""));
+      if (u && u.bucket === "TANYA")
+        tanya.push("Absen tercatat berpencar &mdash; posisi toko sebenarnya di mana?");
+      else if (u && (u.bucket === "USUL" || u.bucket === "KEMBALI"))
+        tanya.push("Titik toko di sistem salah &mdash; pastikan letak tokonya");
+      else if (u && u.bucket === "PAS")
+        tanya.push("Titik toko sudah benar &mdash; kenapa absen jauh dari toko?");
+      else tanya.push("Kenapa absen jauh dari toko?");
+    }
+
+    if (bc && (bc.bucket === "BARU" || bc.bucket === "BELUM")) {
+      masalah.push(`<b class="berat">${BARCODE_INFO[bc.bucket].label}</b>`
+        + `<span class="kecil">${bc.scan} dari ${bc.n} kunjungan discan`
+        + (bc.tglAkhir ? `, terakhir ${escapeHtml(bc.tglAkhir)}` : "")
+        + (bc.alasan ? ` &middot; ${escapeHtml(bc.alasan)}` : "") + `</span>`);
+      tanya.push(bc.alasan
+        ? `Barcode ${escapeHtml(bc.alasan)} &mdash; sudah dilaporkan?`
+        : "Barcode tidak pernah berhasil discan &mdash; kondisinya bagaimana?");
+    }
+    return { masalah, tanya };
+  }
+
+  function susunCetak() {
+    const wadah = $("cetak");
+    if (!wadah) return 0;
+    // Dikelompokkan per salesman yang BERKUNJUNG — dialah yang akan ditanya.
+    const perSls = new Map();
+    const outletRows = new Map();
+    for (const r of state.filtered) {
+      let arr = outletRows.get(r.custno);
+      if (!arr) { arr = []; outletRows.set(r.custno, arr); }
+      arr.push(r);
+    }
+    for (const [custno, rows] of outletRows) {
+      const { masalah, tanya } = masalahOutlet(rows);
+      if (!masalah.length) continue;
+      const sls = rows[0].salesmanEff || "(tanpa nama salesman)";
+      let g = perSls.get(sls);
+      if (!g) { g = { rayon: new Set(), baris: [] }; perSls.set(sls, g); }
+      if (rows[0].rayonEff) g.rayon.add(rows[0].rayonEff);
+      g.baris.push({ custno, nama: rows[0].namaTokoEff, alamat: rows[0].alamatEff,
+                     masalah, tanya });
+    }
+
+    const hariIni = new Date().toLocaleDateString("id-ID",
+      { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
+    const nama = [...perSls.keys()].sort();
+    let html = "";
+    for (const sls of nama) {
+      const g = perSls.get(sls);
+      g.baris.sort((a, b) => String(a.custno).localeCompare(String(b.custno)));
+      html += `<section class="cetak-sls">`
+        + `<div class="cetak-kop"><span class="jml">${g.baris.length} outlet</span>`
+        + `<h2>${escapeHtml(sls)}</h2>`
+        + `<div class="sub">Rayon ${escapeHtml([...g.rayon].join(", ") || "-")}`
+        + ` &middot; dicetak ${escapeHtml(hariIni)}</div></div>`
+        + `<table><thead><tr><th class="no">#</th><th class="kode">Kode</th>`
+        + `<th>Nama Toko</th><th>Yang Terjadi</th><th>Yang Perlu Ditanyakan</th>`
+        + `<th class="isian">Jawaban / Tindakan</th></tr></thead><tbody>`;
+      g.baris.forEach((b, i) => {
+        html += `<tr><td class="no">${i + 1}</td><td class="kode">${escapeHtml(b.custno)}</td>`
+          + `<td>${escapeHtml(b.nama || "")}`
+          + (b.alamat ? `<span class="kecil">${escapeHtml(b.alamat)}</span>` : "") + `</td>`
+          + `<td>${b.masalah.join("<br>")}</td>`
+          + `<td>${b.tanya.join("<br>")}</td><td class="isian"></td></tr>`;
+      });
+      html += `</tbody></table>`
+        + `<div class="cetak-ttd"><div><div class="garis">Salesman &mdash; ${escapeHtml(sls)}</div></div>`
+        + `<div><div class="garis">Diperiksa oleh</div></div></div></section>`;
+    }
+    if (!nama.length)
+      html = `<p class="cetak-kosong">Tidak ada outlet bermasalah pada penyaring yang dipilih.</p>`;
+    wadah.innerHTML = html;
+    return nama.length;
+  }
+
+  if ($("cetakBtn")) {
+    $("cetakBtn").addEventListener("click", () => {
+      if (!state.filtered.length) return;
+      const jml = susunCetak();
+      const outlet = $("cetak").querySelectorAll("tbody tr").length;
+      pesanExport(jml
+        ? `Lembar cetak disiapkan: ${jml} salesman, ${outlet.toLocaleString("id-ID")} outlet `
+          + `— satu halaman per salesman. Di jendela cetak pilih "Simpan sebagai PDF" kalau `
+          + `ingin filenya, atau langsung cetak.`
+        : "Tidak ada outlet bermasalah pada penyaring yang dipilih, jadi tidak ada yang dicetak.");
+      if (jml) setTimeout(() => window.print(), 60);
+    });
+  }
+
   $("exportBtn").addEventListener("click", async () => {
     if (!state.filtered.length) return;
     const btn = $("exportBtn");
