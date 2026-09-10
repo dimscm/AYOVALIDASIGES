@@ -2255,32 +2255,18 @@
   // Isi kolom "Usulan Titik" pada baris kunjungan. Outlet yang semua
   // kunjungannya sudah IN RADIUS tidak punya isi — kolomnya sengaja dibiarkan
   // kosong supaya yang perlu ditindaklanjuti langsung menonjol.
-  // Satu kalimat yang menjelaskan seberapa kuat bukti di balik usulan, dan apa
-  // yang harus dilakukan orang yang membacanya. Dipakai di layar maupun di
-  // Excel supaya keduanya tidak pernah berbeda cerita.
+  // Catatan dibuat pendek dan berpola tetap — hanya empat kemungkinan isi.
+  // Kalimat panjang membuat kolomnya melebar dan, yang lebih merepotkan,
+  // membuat daftar filter di Excel berisi ratusan kalimat berbeda sehingga
+  // tidak bisa dipakai memantau. Angkanya sendiri sudah ada di kolom "Dasar
+  // Usulan" dan "Salesman Berbeda", jadi tidak perlu diulang di sini.
   function catatanUsulan(u) {
-    if (u.bucket === "KEMBALI") {
-      return `Koordinat ini dulu menghasilkan FLAG 1 di outlet yang sama`
-        + (u.tglLolos ? ` (${tglTampil(u.tglLolos)})` : "")
-        + `, lalu titiknya dipindah ${jarakTeks(u.geser)}. Bukti terkuat yang ada: `
-        + `angka ini sudah pernah dinyatakan lolos oleh sistem sendiri.`;
-    }
+    if (!u) return "";
+    if (u.bucket === "KEMBALI") return "Kembalikan titik lama";
     if (u.bucket !== "USUL") return "";
-    const pct = Math.round((u.bagian || 0) * 100);
-    const sisa = u.n - u.rapat;
-    const kuat = u.salesmanBeda > 1
-      ? ` Dikuatkan ${u.salesmanBeda} salesman berbeda di tempat yang sama.` : "";
-    if (u.yakin === "Tinggi") {
-      return `Semua ${u.n} kunjungan bermasalah jatuh di titik ini (sebaran ${jarakTeks(u.sebar)}).`
-        + kuat + ` Paling layak langsung diperbaiki.`;
-    }
-    if (u.yakin === "Sedang") {
-      return `${u.rapat} dari ${u.n} kunjungan (${pct}%) mengumpul di titik ini, ${sisa} menyebar.`
-        + kuat + ` Cocokkan dulu dengan alamat sebelum diubah.`;
-    }
-    return `Hanya ${u.rapat} dari ${u.n} kunjungan (${pct}%) yang mengumpul di titik ini; `
-      + `${sisa} lainnya menyebar.` + kuat + ` Titik ini pantas dicurigai, tapi buktinya tipis — `
-      + `periksa lewat peta dan alamat dulu, jangan langsung diubah di master.`;
+    if (u.yakin === "Tinggi") return "Langsung perbaiki";
+    if (u.yakin === "Sedang") return "Cek alamat dulu";
+    return "Cek peta & alamat dulu";
   }
 
   function titikSel(r) {
@@ -2313,7 +2299,7 @@
     // yang hafal arti koordinat — yang perlu langsung terbaca adalah "harus
     // diapakan", bukan "berapa derajat".
     return `<b class="titik-aksi">Titik toko perlu diperbaiki</b>`
-      + ` <span class="tag-cons yakin-${u.yakin}" title="${escapeHtml(catatanUsulan(u))}">${u.yakin}</span>${kuat}`
+      + ` <span class="tag-cons yakin-${u.yakin}" title="${escapeHtml(TITIK_YAKIN[u.yakin])}">${u.yakin}</span>${kuat}`
       + `<span class="titik-sub">`
       + (u.belumTag ? "titik toko belum diisi" : `meleset ${jarakTeks(u.geser)}`)
       + ` &middot; ${u.rapat} dari ${u.n} kunjungan (${Math.round((u.bagian || 0) * 100)}%)`
@@ -2337,8 +2323,8 @@
       Keyakinan: u.yakin,
       Catatan: catatanUsulan(u),
       "Dasar Usulan": kembali
-        ? `Koordinat ini menghasilkan FLAG 1 pada ${tglTampil(u.tglLolos)}`
-        : `${u.rapat} dari ${u.n} kunjungan (${Math.round((u.bagian || 0) * 100)}%) mengumpul di titik ini`,
+        ? `FLAG 1 pada ${tglTampil(u.tglLolos)}`
+        : `${u.rapat} dari ${u.n} (${Math.round((u.bagian || 0) * 100)}%)`,
       "Sebaran (m)": u.sebar === undefined ? "" : u.sebar,
       "Lat Sekarang": u.belumTag ? "" : koordTeks(u.curLa),
       "Long Sekarang": u.belumTag ? "" : koordTeks(u.curLo),
