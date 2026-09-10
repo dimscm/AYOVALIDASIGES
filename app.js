@@ -1019,6 +1019,7 @@
       if (!state.ediRows.length) throw new Error("EDI tidak berisi baris data.");
 
       state.scanIndex = new Map();
+      state.hhtOutletSet = new Set();
       let hhtWarn = "";
       let hhtTglTerbaca = 0;
       const hhtTanggalSet = new Set();
@@ -1029,6 +1030,7 @@
         const hhtAoa = await readWorkbook(state.hhtFile);
         const parsed = parseHht(hhtAoa);
         state.hhtRows = parsed.rows;
+        state.hhtOutletSet = new Set(parsed.rows.map((h) => String(h.custno || "").trim()));
         hhtWarn = parsed.warn || "";
         // Dijodohkan per outlet DAN per tanggal. Kalau hanya per outlet, kunjungan
         // tanggal 24 Agustus bisa mengambil alasan & status scan dari kunjungan
@@ -1094,17 +1096,27 @@
         // Alasan boleh dipinjam dari tanggal lain (ditandai di tabel). Status scan
         // dan kategori TIDAK — itu bukti kunjungan hari itu, tidak boleh dipinjam.
         const alasanLuar = hht ? null : (state.alasanByOutlet.get(r.custno) || null);
-        // Kunjungan yang tanggalnya sama sekali tidak ada di file HHT bukan
-        // "tidak scan" — statusnya tidak diketahui. Ditandai supaya bisa
-        // dikeluarkan dari ringkasan, karena kalau ikut dihitung angka
-        // "Tidak scan" jadi besar bukan karena temuan lapangan, tapi karena
-        // filenya beda periode.
-        const diLuarHht = !!(state.hhtFile && pakaiTanggal && tgl && !hhtTanggalSet.has(tgl));
+        // Kunjungan yang tidak punya catatan di HHT bukan "tidak scan" —
+        // statusnya TIDAK DIKETAHUI. Ada dua sebab, dan dua-duanya harus
+        // ditangkap:
+        //
+        //   a. tanggalnya tidak ada di HHT (file beda periode);
+        //   b. outletnya sama sekali tidak ada di HHT (file beda cakupan —
+        //      misalnya HHT satu cabang, EDI seluruh area).
+        //
+        // Dulu hanya (a) yang diperiksa. Akibatnya HHT satu cabang dengan
+        // tanggal yang sama lolos tanpa peringatan, dan 27.541 kunjungan yang
+        // memang tidak tercakup ikut terhitung "Tidak scan" — angka temuan
+        // yang sebenarnya cuma cerminan file yang tidak sepadan.
+        const takAdaHht = !!(state.hhtFile && !state.hhtOutletSet.has(r.custno));
+        const diLuarTgl = !!(state.hhtFile && pakaiTanggal && tgl && !hhtTanggalSet.has(tgl));
+        const diLuarHht = takAdaHht || diLuarTgl;
         // Periode dipakai untuk filter. Kalau kolomnya kosong, bulan dari
         // tanggal kunjungan jadi penggantinya.
         const periodeEff = String(r.periode ?? "").trim() || (tgl ? "Bulan " + tgl.split("-")[1] : "");
         return { ...r, hht, hhtNote, alasanLuar, dmp, category: cat, namaTokoEff, salesmanEff,
-                 salesmanDmp, alamatEff, rayonEff, cycleEff, diLuarHht, periodeEff,
+                 salesmanDmp, alamatEff, rayonEff, cycleEff, diLuarHht, takAdaHht, diLuarTgl,
+                 periodeEff,
                  tglIso: tglIso(r.visitDate) };
       });
 
@@ -1218,7 +1230,7 @@
                     + `(${dipinjam.toLocaleString("id-ID")} baris, ditandai tanggal asalnya) sebagai petunjuk.`
                   : ""),
           };
-        } else if (pakaiTanggal && bisaDisaring) {
+        } else if (bisaDisaring) {
           // Irisannya ada, tapi tidak semua. Ini yang bikin angka "Tidak scan"
           // membengkak tanpa sebab lapangan: kunjungan di bulan yang HHT-nya
           // tidak diupload ikut terhitung tidak scan.
@@ -1230,15 +1242,26 @@
             const v = rapi(set);
             return v.length === 1 ? v[0] : `${v[0]} s/d ${v[v.length - 1]}`;
           };
+          // Dua sebab dipisah, karena tindakan perbaikannya berbeda: yang satu
+          // upload HHT periode lain, yang satu upload HHT cabang lain.
+          const nTgl = results.filter((r) => r.diLuarTgl && !r.takAdaHht).length;
+          const nOutlet = results.filter((r) => r.takAdaHht).length;
+          const sebab = [];
+          if (nOutlet) sebab.push(`${nOutlet.toLocaleString("id-ID")} kunjungan outletnya tidak ada `
+            + `di file HHT sama sekali`);
+          if (nTgl) sebab.push(`${nTgl.toLocaleString("id-ID")} kunjungan tanggalnya di luar `
+            + `${rentang(hhtTanggalSet)}`);
           state.periodeWarn = {
             info: true,
-            ringkas: `HHT hanya berisi tanggal ${rentang(hhtTanggalSet)}, sedangkan EDI berisi `
-              + `${rentang(ediTgl)}. ${diLuar.toLocaleString("id-ID")} kunjungan di luar periode HHT `
-              + `tidak ikut dihitung.`,
-            detail: `Tanpa itu, kunjungan bulan yang HHT-nya belum diupload akan terhitung `
-              + `"Tidak scan" — bukan karena barcodenya tidak discan, tapi karena datanya memang `
-              + `belum ada. Hilangkan centang "Hanya periode HHT" di bawah kalau ingin melihat `
-              + `semua kunjungan, atau upload HHT periode yang sama supaya semuanya bisa dinilai.`,
+            judul: "File HHT tidak mencakup semua kunjungan.",
+            ringkas: `${sebab.join(", dan ")}. Totalnya `
+              + `${diLuar.toLocaleString("id-ID")} dari ${results.length.toLocaleString("id-ID")} `
+              + `kunjungan tidak bisa dinilai scan-nya, jadi tidak ikut dihitung.`,
+            detail: `Kunjungan tanpa catatan HHT bukan berarti barcodenya tidak discan — `
+              + `statusnya tidak diketahui. Kalau ikut dihitung, angka "Tidak scan" jadi besar `
+              + `bukan karena temuan lapangan, tapi karena filenya tidak sepadan. `
+              + `Hilangkan centang "Hanya yang ada di HHT" di bawah kalau ingin melihat semua `
+              + `kunjungan, atau upload HHT yang cakupannya sama dengan EDI.`,
           };
         } else {
           state.periodeWarn = "";
@@ -1252,8 +1275,8 @@
         const w = state.periodeWarn;
         wb.classList.toggle("info", !!(w && w.info));
         wb.innerHTML = w
-          ? `<b>${w.info ? "Periode EDI dan HHT tidak sama panjang."
-                         : "Periode EDI dan HHT tidak bertemu."}</b> ${escapeHtml(w.ringkas)}`
+          ? `<b>${escapeHtml(w.judul || "Periode EDI dan HHT tidak bertemu.")}</b> `
+            + `${escapeHtml(w.ringkas)}`
             + (w.detail ? `<details class="warn-more"><summary>Kenapa?</summary>`
                           + `<p>${escapeHtml(w.detail)}</p></details>` : "")
           : "";
@@ -1400,8 +1423,8 @@
     if ($("filterPeriodeHht") && $("filterPeriodeHht").checked
         && !$("rowPeriodeHht").classList.contains("hidden")) {
       const luar = state.results.filter((r) => r.diLuarHht).length;
-      aktif.push(`hanya periode HHT (menyembunyikan ${luar.toLocaleString("id-ID")} kunjungan `
-        + `di luar tanggal HHT)`);
+      aktif.push(`hanya yang ada di HHT (menyembunyikan ${luar.toLocaleString("id-ID")} kunjungan `
+        + `yang tidak bisa dinilai scan-nya)`);
     }
     if ($("filterInkonsisten") && $("filterInkonsisten").checked) aktif.push("hanya inkonsisten");
     const bcv = $("filterBarcode") ? $("filterBarcode").value : "";

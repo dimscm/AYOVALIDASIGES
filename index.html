@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>M3 Beverage Mayora</title>
-  <link rel="stylesheet" href="styles.css?v=43" />
+  <link rel="stylesheet" href="styles.css?v=44" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23c8102e'/%3E%3Ctext x='50' y='62' font-size='34' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EM3%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -147,6 +147,13 @@
               tidak ada yang mengejar barcode yang sebenarnya sudah aktif.
               Catatan: <b>M</b> pada kolom Scan berarti input manual — barcodenya tidak discan,
               jadi dihitung sebagai gagal, bukan berhasil.</p>
+            <p class="hnote"><b>Centang "Hanya yang ada di HHT"</b> muncul kalau ada kunjungan yang
+              tidak punya catatan di file HHT — entah karena tanggalnya di luar periode HHT, atau
+              karena outletnya tidak tercakup file itu (misalnya HHT satu cabang, EDI seluruh area).
+              Kunjungan seperti itu <b>tidak bisa dinilai</b> scan-nya: tidak adanya catatan bukan
+              berarti barcodenya tidak discan. Centangnya menyala sendiri supaya angka di Ringkasan
+              tidak membengkak karena file yang tidak sepadan. Kalau centangnya tidak muncul sama
+              sekali, artinya semua kunjungan sudah tercakup HHT.</p>
             <p class="hnote"><b>Kolom "Titik Toko"</b> menjawab pertanyaan: kalau flag-nya 0 atau blank, yang salah
               salesmannya atau titik tokonya? Kalau kunjungan berkali-kali jatuh di tempat yang sama
               tapi jauh dari titik toko di master, yang patut dicurigai titik tokonya —
@@ -264,9 +271,9 @@
             <option value="SATU">Baru 1 kunjungan bermasalah</option>
           </select>
           <label class="check-toggle hidden" id="rowPeriodeHht"
-                 title="Kunjungan yang tanggalnya tidak ada di file HHT tidak bisa dinilai scan-nya">
+                 title="Kunjungan yang tidak punya catatan di HHT tidak bisa dinilai scan-nya — entah karena tanggalnya di luar periode HHT, atau outletnya tidak tercakup file itu">
             <input type="checkbox" id="filterPeriodeHht" />
-            <span>Hanya periode HHT</span>
+            <span>Hanya yang ada di HHT</span>
           </label>
           <label class="check-toggle">
             <input type="checkbox" id="filterInkonsisten" />
@@ -458,7 +465,7 @@
       </section>
     </div>
 
-    <p class="credit">dimscm &middot; v43</p>
+    <p class="credit">dimscm &middot; v44</p>
   </main>
 
   <!-- Lembar cetak per salesman. Disusun saat tombol Cetak ditekan, dan hanya
@@ -468,7 +475,7 @@
   <script src="vendor/xlsx.full.min.js"></script>
   <script src="vendor/jszip.min.js"></script>
   <script src="vendor/7zz.umd.js"></script>
-  <script src="app.js?v=43"></script>
-  <script src="dash2.js?v=43"></script>
+  <script src="app.js?v=44"></script>
+  <script src="dash2.js?v=44"></script>
 </body>
 </html>
