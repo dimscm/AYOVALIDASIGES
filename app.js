@@ -1358,12 +1358,12 @@
       if (hanyaHht && r.diLuarHht && !(opsi && opsi.abaikanHht)) return false;
       if (pers.size > 0 && !pers.has(r.periodeEff)) return false;
       if (onlyMixed && r.consistency !== "MIXED") return false;
-      const bc = $("filterBarcode") ? $("filterBarcode").value : "";
+      const bc = (opsi && opsi.abaikanBarcode) ? "" : ($("filterBarcode") ? $("filterBarcode").value : "");
       if (bc) {
         const u = state.barcodeByOutlet && state.barcodeByOutlet.get(r.custno);
         if (!u || u.bucket !== bc) return false;
       }
-      if (kel) {
+      if (kel && !(opsi && opsi.abaikanTitik)) {
         // Kelompok ini soal kunjungan yang bermasalah. Kunjungan flag 1 di
         // outlet yang sama tidak ada urusannya, jadi tidak ikut ditampilkan.
         if (r.flagRadius === "1") return false;
@@ -1395,6 +1395,8 @@
     });
     state.page = 1;
     renderTable();
+    labelTitikFilter();
+    labelBarcodeFilter();
     renderFilterInfo();
   }
 
@@ -1799,7 +1801,7 @@
   function pesanExport(teks) {
     const el = $("exportHint");
     if (!el) return;
-    el.textContent = teks;
+    el.innerHTML = String(teks).replace(/&middot;/g, "&middot;");
     el.classList.toggle("hidden", !teks);
   }
 
@@ -2102,6 +2104,12 @@
         const buf = XLSX.write(wb, { type: "array", bookType: "xlsx" });
         await unduh(`hasil-validasi-${tgl}.xlsx`, [buf],
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        const isi = [`Hasil ${state.filtered.length.toLocaleString("id-ID")} baris`];
+        if (usulan.length) isi.push(`Usulan Titik ${usulan.length.toLocaleString("id-ID")} outlet`);
+        if (barcode.length) isi.push(`Barcode Perlu Dicek ${barcode.length.toLocaleString("id-ID")} outlet`);
+        pesanExport(`File berisi: ${isi.join(" &middot; ")}. Daftar kerja (Usulan Titik, Barcode) `
+          + `memakai seluruh outlet pada saringan yang dipilih — tidak dipotong oleh centang `
+          + `"Hanya yang ada di HHT", karena koordinat dan radius tidak membutuhkan HHT.`);
       }
     } catch (err) {
       console.error(err);
@@ -2399,10 +2407,37 @@
     labelBarcodeFilter();
   }
 
+  // Menghitung outlet per kelompok DI DALAM pilihan yang sedang aktif —
+  // salesman, rayon, periode, kategori, tanggal, pencarian, semuanya ikut.
+  // Angka di dropdown harus menjawab "kalau saya pilih ini, dapat berapa" —
+  // bukan jumlah di seluruh file. Hanya saringan kelompok itu sendiri yang
+  // diabaikan, supaya angkanya tidak menyusut jadi cuma pilihan yang sedang
+  // dipakai.
+  function hitungKelompok(peta, opsi) {
+    const jml = {};
+    if (!peta || !peta.size) return jml;
+    const sudah = new Set();
+    const cats = getSelectedCategories();
+    for (const r of getBaseFiltered(opsi)) {
+      if (cats.size > 0 && !cats.has(r.category)) continue;
+      // Saringan titik menyembunyikan kunjungan flag 1 (lihat getBaseFiltered),
+      // jadi angkanya pun tidak boleh menghitung outlet yang di pilihan ini
+      // cuma menyisakan kunjungan flag 1 — nanti dipilih, tabelnya kosong.
+      if (opsi && opsi.tanpaFlag1 && r.flagRadius === "1") continue;
+      if (sudah.has(r.custno)) continue;
+      sudah.add(r.custno);
+      const u = peta.get(r.custno);
+      if (u) jml[u.bucket] = (jml[u.bucket] || 0) + 1;
+    }
+    return jml;
+  }
+
   function labelBarcodeFilter() {
     const sel = $("filterBarcode");
     if (!sel) return;
-    const j = state.barcodeStats || { LANCAR: 0, BERES: 0, BARU: 0, BELUM: 0 };
+    const j = state.results && state.results.length
+      ? hitungKelompok(state.barcodeByOutlet, { abaikanBarcode: true })
+      : (state.barcodeStats || {});
     const n = (x) => (x || 0).toLocaleString("id-ID");
     const teks = {
       "": "Semua barcode",
@@ -2565,7 +2600,11 @@
   function labelTitikFilter() {
     const sel = $("filterTitik");
     if (!sel) return;
-    const j = state.titikStats || { kembali: 0, usul: 0, tanya: 0, pas: 0, satu: 0 };
+    const k = state.results && state.results.length
+      ? hitungKelompok(state.titikByOutlet, { abaikanTitik: true, tanpaFlag1: true })
+      : {};
+    const j = { kembali: k.KEMBALI || 0, usul: k.USUL || 0, tanya: k.TANYA || 0,
+                pas: k.PAS || 0, satu: k.SATU || 0 };
     const n = (x) => x.toLocaleString("id-ID");
     const teks = {
       "": "Semua outlet",
