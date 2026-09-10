@@ -959,6 +959,7 @@
       $("tglDari").value = ""; $("tglSampai").value = "";
     }
     if ($("exportHint")) { $("exportHint").textContent = ""; $("exportHint").classList.add("hidden"); }
+    if ($("filterInfo")) { $("filterInfo").innerHTML = ""; $("filterInfo").classList.add("hidden"); }
     document.querySelectorAll(".filterRayonItem").forEach((c) => (c.checked = false));
     const ryAll = $("filterRayonAll"); if (ryAll) ryAll.checked = true;
     const ryLabel = $("filterRayonLabel"); if (ryLabel) ryLabel.textContent = "Semua rayon";
@@ -1345,6 +1346,80 @@
     });
     state.page = 1;
     renderTable();
+    renderFilterInfo();
+  }
+
+  // Berapa kunjungan yang sedang disembunyikan, dan oleh penyaring yang mana.
+  // Tanpa ini, filter yang menyala diam-diam (terutama "Hanya periode HHT"
+  // yang tercentang sendiri) membuat data terlihat seperti kurang tertarik
+  // dari sumbernya — padahal cuma sedang disaring.
+  function renderFilterInfo() {
+    const el = $("filterInfo");
+    if (!el) return;
+    const total = state.results.length;
+    const tampil = state.filtered.length;
+
+    const aktif = [];
+    const q = $("search").value.trim();
+    if (q) aktif.push(`pencarian "${q}"`);
+    const nCat = getSelectedCategories().size;
+    if (nCat) aktif.push(`${nCat} kategori`);
+    const nSls = getSelectedSalesmen().size;
+    if (nSls) aktif.push(`${nSls} salesman`);
+    const nRay = getSelectedRayon().size;
+    if (nRay) aktif.push(`${nRay} rayon`);
+    const nPer = getSelectedPeriode().size;
+    if (nPer) aktif.push(`${nPer} periode`);
+    const rg = rentangTanggal();
+    if (rg.dari || rg.sampai) {
+      aktif.push(`tanggal ${rg.dari ? tglTampil(rg.dari) : "awal"} s/d `
+        + `${rg.sampai ? tglTampil(rg.sampai) : "akhir"}`);
+    }
+    if ($("filterPeriodeHht") && $("filterPeriodeHht").checked
+        && !$("rowPeriodeHht").classList.contains("hidden")) {
+      const luar = state.results.filter((r) => r.diLuarHht).length;
+      aktif.push(`hanya periode HHT (menyembunyikan ${luar.toLocaleString("id-ID")} kunjungan `
+        + `di luar tanggal HHT)`);
+    }
+    if ($("filterInkonsisten") && $("filterInkonsisten").checked) aktif.push("hanya inkonsisten");
+    const kel = $("filterTitik") ? $("filterTitik").value : "";
+    if (kel) {
+      const nama = $("filterTitik").selectedOptions[0].textContent.replace(/\s*\(.*\)$/, "");
+      aktif.push(`kelompok titik "${nama.trim()}" — hanya kunjungan bermasalah, `
+        + `kunjungan flag 1 tidak ikut tampil`);
+    }
+
+    if (!aktif.length || tampil === total) {
+      el.classList.add("hidden");
+      el.innerHTML = "";
+      return;
+    }
+    el.innerHTML = `Menampilkan <b>${tampil.toLocaleString("id-ID")}</b> dari `
+      + `<b>${total.toLocaleString("id-ID")}</b> kunjungan yang diupload. `
+      + `Disaring oleh: ${aktif.map((x) => escapeHtml(x)).join(" &middot; ")}. `
+      + `<button type="button" class="ghost sm" id="hapusFilter">Tampilkan semua</button>`;
+    el.classList.remove("hidden");
+    $("hapusFilter").addEventListener("click", hapusSemuaFilter);
+  }
+
+  // Mengosongkan penyaring saja — file yang sudah diproses tetap dipakai.
+  function hapusSemuaFilter() {
+    $("search").value = "";
+    document.querySelectorAll(".filterCategoryItem, .filterSalesmanItem, .filterRayonItem, .filterPeriodeItem")
+      .forEach((c) => (c.checked = false));
+    ["filterCategoryAll", "filterSalesmanAll", "filterRayonAll", "filterPeriodeAll"]
+      .forEach((id) => { if ($(id)) $(id).checked = true; });
+    if (catCtrl) catCtrl.updateLabel();
+    if (smCtrl) smCtrl.updateLabel();
+    if (ryCtrl) ryCtrl.updateLabel();
+    if (pdCtrl) pdCtrl.updateLabel();
+    if ($("filterPeriodeHht")) $("filterPeriodeHht").checked = false;
+    if ($("filterInkonsisten")) $("filterInkonsisten").checked = false;
+    if ($("filterTitik")) $("filterTitik").value = "";
+    if ($("tglDari")) $("tglDari").value = "";
+    if ($("tglSampai")) $("tglSampai").value = "";
+    hitungTitik();
+    applyFilters();
   }
 
   function renderTable() {

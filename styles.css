@@ -305,6 +305,16 @@ body.full-cols .col-x { display: table-cell; }
    dasarnya bukan tebakan, tapi angka yang dulu sudah menghasilkan flag 1. */
 .titik-aksi.kembali { color: var(--info); }
 
+/* Berapa yang sedang disembunyikan penyaring. Nada biru: memberi tahu, bukan
+   memperingatkan — datanya utuh, hanya sedang disaring. */
+.filterinfo {
+  margin: -4px 0 12px; padding: 9px 12px; font-size: 12px; line-height: 1.6;
+  background: var(--info-bg); border-left: 3px solid var(--info);
+  border-radius: 0 5px 5px 0; color: #1f4470;
+}
+.filterinfo b { color: var(--info); }
+.filterinfo button { margin-left: 8px; vertical-align: baseline; }
+
 /* Keterangan hasil export, tepat di bawah tombolnya. */
 .exporthint {
   margin: -6px 0 12px; padding: 8px 11px; font-size: 12px; line-height: 1.55;
