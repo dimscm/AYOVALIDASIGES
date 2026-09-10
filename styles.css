@@ -630,42 +630,68 @@ tr.row-dup .dupcell { visibility: hidden; }
    salesman, angka seperlunya, dan kolom kosong untuk ditulis tangan. Di layar
    blok ini tidak pernah terlihat; browser sendiri yang mengubahnya jadi PDF
    lewat Print - Simpan sebagai PDF, jadi tidak perlu pustaka tambahan dan
-   hurufnya tetap bisa dicari. */
+   hurufnya tetap bisa dicari.
+
+   Warnanya ditahan seperlunya: satu garis merah di kop dan judul kolom abu
+   muda. Selebihnya hitam-putih, supaya tetap terbaca di printer laser dan
+   tidak boros tinta. */
 #cetak { display: none; }
 
 @media print {
-  /* Yang dicetak hanya lembar ini. */
   body > *:not(#cetak) { display: none !important; }
   #cetak { display: block !important; }
-  @page { size: A4 portrait; margin: 12mm 10mm; }
-  body { background: #fff; font-size: 10pt; color: #000; }
+  @page { size: A4 portrait; margin: 11mm 9mm; }
+  body {
+    background: #fff; color: #111;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 9.5pt; line-height: 1.35;
+  }
 
   .cetak-sls { page-break-after: always; }
   .cetak-sls:last-child { page-break-after: auto; }
 
-  .cetak-kop { border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 10px; }
-  .cetak-kop h2 { margin: 0 0 2px; font-size: 13pt; }
-  .cetak-kop .sub { font-size: 9pt; color: #333; }
-  .cetak-kop .jml { float: right; font-size: 11pt; font-weight: 700; }
-
-  #cetak table { width: 100%; border-collapse: collapse; font-size: 9pt; }
-  #cetak th, #cetak td {
-    border: 1px solid #999; padding: 4px 5px; text-align: left;
-    vertical-align: top; page-break-inside: avoid;
+  /* ---- Kop ---- */
+  .cetak-kop { border-bottom: 2.5pt solid #c8102e; padding-bottom: 5px; margin-bottom: 9px; }
+  .kop-atas, .kop-bawah { display: flex; justify-content: space-between; align-items: baseline; }
+  .kop-merek { font-size: 8pt; font-weight: 700; letter-spacing: .08em; color: #c8102e; text-transform: uppercase; }
+  .kop-tgl { font-size: 8.5pt; color: #444; }
+  .cetak-kop h2 { margin: 1px 0 3px; font-size: 15pt; font-weight: 700; letter-spacing: -.01em; }
+  .kop-rayon { font-size: 9.5pt; color: #333; }
+  .kop-chip { display: flex; gap: 5px; }
+  .chip {
+    border: 0.7pt solid #999; border-radius: 9pt; padding: 1px 7px;
+    font-size: 8pt; color: #333; white-space: nowrap;
   }
-  #cetak th { background: #eee; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .02em; }
-  /* Judul kolom ikut tercetak lagi di tiap halaman kalau daftarnya panjang —
-     tanpa ini, halaman kedua dan seterusnya jadi kolom tanpa nama. */
-  #cetak thead { display: table-header-group; }
-  #cetak tbody tr { page-break-inside: avoid; }
-  #cetak .no { width: 22px; text-align: right; }
-  #cetak .kode { width: 62px; font-family: monospace; }
-  #cetak .isian { width: 90px; }
-  #cetak .kecil { display: block; font-size: 8pt; color: #444; }
-  #cetak .berat { font-weight: 700; }
+  .chip.kuat { border-color: #111; color: #111; font-weight: 700; }
 
-  .cetak-ttd { margin-top: 14px; font-size: 9pt; display: flex; gap: 40px; }
+  /* ---- Tabel ---- */
+  #cetak table { width: 100%; border-collapse: collapse; }
+  #cetak thead { display: table-header-group; }
+  #cetak th {
+    background: #f1f1f1; border: 0.7pt solid #bbb; padding: 4px 5px;
+    font-size: 7.5pt; text-transform: uppercase; letter-spacing: .04em;
+    text-align: left; color: #333;
+  }
+  #cetak td {
+    border: 0.7pt solid #ccc; padding: 5px; vertical-align: top; font-size: 9pt;
+  }
+  #cetak tbody tr { page-break-inside: avoid; }
+  #cetak .no { width: 20px; text-align: right; color: #666; }
+  #cetak .kode { width: 58px; font-family: ui-monospace, Menlo, monospace; font-size: 8.5pt; }
+  #cetak .isian { width: 78px; }
+  #cetak .cek { width: 34px; text-align: center; }
+  /* Kotak centangnya saja yang besar — judul kolomnya tetap seukuran yang lain. */
+  #cetak td.cek { font-size: 13pt; color: #666; }
+  #cetak .kecil { display: block; font-size: 7.5pt; color: #555; margin-top: 1px; }
+  #cetak .berat { font-weight: 700; }
+  /* Tautan dibiarkan hitam supaya tidak terbaca sebagai coretan di kertas,
+     tapi tetap bisa diklik saat lembar ini dibuka sebagai PDF. */
+  #cetak a { color: #111; text-decoration: none; border-bottom: 0.5pt dotted #888; }
+
+  /* ---- Kaki ---- */
+  .cetak-ttd { margin-top: 16px; font-size: 8.5pt; display: flex; gap: 26px; }
   .cetak-ttd div { flex: 1; }
-  .cetak-ttd .garis { margin-top: 32px; border-top: 1px solid #000; padding-top: 3px; }
+  .cetak-ttd .garis { margin-top: 30px; border-top: 0.7pt solid #111; padding-top: 3px; color: #333; }
+  .cetak-kaki { margin-top: 10px; font-size: 7.5pt; color: #666; }
   .cetak-kosong { padding: 20px; text-align: center; font-size: 11pt; }
 }

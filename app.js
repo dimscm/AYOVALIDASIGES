@@ -1892,8 +1892,19 @@
     const luar = rows.filter((x) => x.flagRadius !== "1");
     if (luar.length) {
       const tgl = luar.slice(-3).map((x) => String(x.visitDate || "").slice(0, 5)).filter(Boolean);
+      // Posisi absen TERAKHIR: itu yang paling bisa dijawab salesmannya hari ini
+      // ("waktu itu kamu di mana?"). Diambil dari kunjungan bermasalah paling
+      // akhir yang koordinatnya terekam.
+      let pos = null;
+      for (let i = luar.length - 1; i >= 0 && !pos; i--) {
+        const la = angka(luar[i].latVisit), lo = angka(luar[i].longVisit);
+        if (!titikKosong(la, lo)) pos = { la, lo, tgl: String(luar[i].visitDate || "").slice(0, 5) };
+      }
       masalah.push(`<b class="berat">Di luar radius</b> ${luar.length}&times;`
-        + (tgl.length ? `<span class="kecil">${escapeHtml(tgl.join(", "))}</span>` : ""));
+        + (tgl.length ? `<span class="kecil">${escapeHtml(tgl.join(", "))}</span>` : "")
+        + (pos ? `<span class="kecil">absen terakhir ${escapeHtml(pos.tgl)}: `
+            + `<a href="${petaPin(pos.la, pos.lo)}">${pos.la.toFixed(5)}, ${pos.lo.toFixed(5)}</a>`
+            + `</span>` : ""));
       if (u && u.bucket === "TANYA")
         tanya.push("Absen tercatat berpencar &mdash; posisi toko sebenarnya di mana?");
       else if (u && (u.bucket === "USUL" || u.bucket === "KEMBALI"))
@@ -1933,6 +1944,11 @@
       let g = perSls.get(sls);
       if (!g) { g = { rayon: new Set(), baris: [] }; perSls.set(sls, g); }
       if (rows[0].rayonEff) g.rayon.add(rows[0].rayonEff);
+      const adaRadius = rows.some((x) => x.flagRadius !== "1");
+      const bc = state.barcodeByOutlet && state.barcodeByOutlet.get(custno);
+      const adaBarcode = !!(bc && (bc.bucket === "BARU" || bc.bucket === "BELUM"));
+      if (adaRadius) g.radius = (g.radius || 0) + 1;
+      if (adaBarcode) g.barcode = (g.barcode || 0) + 1;
       g.baris.push({ custno, nama: rows[0].namaTokoEff, alamat: rows[0].alamatEff,
                      masalah, tanya });
     }
@@ -1944,24 +1960,38 @@
     for (const sls of nama) {
       const g = perSls.get(sls);
       g.baris.sort((a, b) => String(a.custno).localeCompare(String(b.custno)));
+      const chip = [];
+      if (g.radius) chip.push(`<span class="chip">${g.radius} outlet radius</span>`);
+      if (g.barcode) chip.push(`<span class="chip">${g.barcode} outlet barcode</span>`);
       html += `<section class="cetak-sls">`
-        + `<div class="cetak-kop"><span class="jml">${g.baris.length} outlet</span>`
+        + `<header class="cetak-kop">`
+        + `<div class="kop-atas"><span class="kop-merek">M3 &mdash; Beverage Mayora</span>`
+        + `<span class="kop-tgl">${escapeHtml(hariIni)}</span></div>`
         + `<h2>${escapeHtml(sls)}</h2>`
-        + `<div class="sub">Rayon ${escapeHtml([...g.rayon].join(", ") || "-")}`
-        + ` &middot; dicetak ${escapeHtml(hariIni)}</div></div>`
+        + `<div class="kop-bawah"><span class="kop-rayon">Rayon `
+        + `${escapeHtml([...g.rayon].join(", ") || "-")}</span>`
+        + `<span class="kop-chip">${chip.join("")}`
+        + `<span class="chip kuat">${g.baris.length} outlet</span></span></div>`
+        + `</header>`
         + `<table><thead><tr><th class="no">#</th><th class="kode">Kode</th>`
         + `<th>Nama Toko</th><th>Yang Terjadi</th><th>Yang Perlu Ditanyakan</th>`
-        + `<th class="isian">Jawaban / Tindakan</th></tr></thead><tbody>`;
+        + `<th class="isian">Jawaban / Tindakan</th><th class="cek">Selesai</th></tr></thead><tbody>`;
       g.baris.forEach((b, i) => {
         html += `<tr><td class="no">${i + 1}</td><td class="kode">${escapeHtml(b.custno)}</td>`
-          + `<td>${escapeHtml(b.nama || "")}`
+          + `<td><b>${escapeHtml(b.nama || "")}</b>`
           + (b.alamat ? `<span class="kecil">${escapeHtml(b.alamat)}</span>` : "") + `</td>`
           + `<td>${b.masalah.join("<br>")}</td>`
-          + `<td>${b.tanya.join("<br>")}</td><td class="isian"></td></tr>`;
+          + `<td>${b.tanya.join("<br>")}</td><td class="isian"></td>`
+          + `<td class="cek">&#9744;</td></tr>`;
       });
       html += `</tbody></table>`
-        + `<div class="cetak-ttd"><div><div class="garis">Salesman &mdash; ${escapeHtml(sls)}</div></div>`
-        + `<div><div class="garis">Diperiksa oleh</div></div></div></section>`;
+        + `<div class="cetak-ttd">`
+        + `<div><div class="garis">Salesman &mdash; ${escapeHtml(sls)}</div></div>`
+        + `<div><div class="garis">Diperiksa oleh</div></div>`
+        + `<div><div class="garis">Tanggal selesai</div></div></div>`
+        + `<p class="cetak-kaki">Koordinat pada kolom "Yang Terjadi" adalah posisi absen terakhir `
+        + `salesman &mdash; bisa diklik kalau lembar ini dibuka sebagai PDF.</p>`
+        + `</section>`;
     }
     if (!nama.length)
       html = `<p class="cetak-kosong">Tidak ada outlet bermasalah pada penyaring yang dipilih.</p>`;
