@@ -1863,9 +1863,18 @@
   //    titik usulannya layak dipercaya. Ini angka kita sendiri, dan sengaja
   //    jauh lebih ketat dari radius izin: kunjungan yang tersebar 40 m masih
   //    "lolos radius", tapi sebagai penunjuk letak toko ia terlalu kabur.
-  //    Dengan 10 m, usulan yang lolos punya sebaran paling jauh 8 m pada data
-  //    uji — cukup rapat untuk dianggap menunjuk satu bangunan.
-  const TOLERANSI_RAPAT = 10;
+  //    Pada data uji, usulan yang lolos dengan angka ini punya sebaran paling
+  //    jauh 18 m — masih dalam ukuran satu bangunan beserta halamannya.
+  const TOLERANSI_RAPAT = 25;
+
+  // Angka toleransi di teks bantuan diisi dari kode. Sudah dua kali angkanya
+  // berubah; kalau ditulis manual di HTML, cepat atau lambat penjelasannya
+  // akan berbeda dari aturan yang benar-benar dipakai. Harus ditulis di bawah
+  // konstantanya: const tidak ter-hoisting, memakainya lebih awal membuat
+  // seluruh skrip gagal dimuat dan halaman mati tanpa pesan apa pun.
+  document.querySelectorAll(".tol-rapat").forEach((el) => {
+    el.textContent = `${TOLERANSI_RAPAT} meter`;
+  });
 
   const TITIK_YAKIN = {
     Tinggi: "Semua kunjungan jatuh di titik usulan, dan dikuatkan banyak hari atau lebih dari satu salesman. Paling layak langsung diperbaiki.",
