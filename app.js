@@ -1664,7 +1664,8 @@
     "Nama Toko", "Salesman", "Rayon (Team)", "Cycle", "Alamat Toko", "Visit Date",
     "Jam Masuk", "Jam Keluar", "Flag Radius", "Distance", "Lat Visit", "Long Visit",
     "Lat Val", "Long Val", "HHT", "Tipe Scan", "Alasan HHT", "Alasan Dari Tanggal",
-    "Alor Reason", "Saran", "Titik Toko", "Lat Usulan", "Long Usulan", "Keyakinan Usulan"];
+    "Alor Reason", "Saran", "Titik Toko", "Lat Usulan", "Long Usulan", "Keyakinan Usulan",
+    "Catatan Usulan"];
 
   const TITIK_TEKS = {
     USUL: "Perlu diperbaiki",
@@ -1705,7 +1706,7 @@
       alasanHht(r) ? "" : (r.alasanLuar ? (r.alasanLuar.tgl || "tanggal lain") : ""),
       r.alorReason || "", info.suggest, titik,
       adaUsulan ? koordTeks(u.mLat) : "", adaUsulan ? koordTeks(u.mLon) : "",
-      adaUsulan ? u.yakin : "",
+      adaUsulan ? u.yakin : "", u ? catatanUsulan(u) : "",
     ];
   }
 
@@ -1927,6 +1928,12 @@
 
   const RADIUS_DEFAULT = 50;
 
+  // Berapa bagian kunjungan bermasalah yang harus mengumpul sebelum titiknya
+  // layak diusulkan. Dulu 60% (mayoritas). Diturunkan supaya outlet yang
+  // sebagian kunjungannya konsisten di satu tempat tetap dapat usulan —
+  // keyakinannya yang dibedakan, bukan usulannya yang dibuang.
+  const AMBANG_RAPAT = 0.33;
+
   const TITIK_YAKIN = {
     Tinggi: "Semua kunjungan jatuh di titik usulan, dan dikuatkan banyak hari atau lebih dari satu salesman. Paling layak langsung diperbaiki.",
     Sedang: "Semua kunjungan jatuh di titik usulan, tapi buktinya masih sedikit. Cek dulu alamatnya.",
@@ -2062,6 +2069,23 @@
     return { la, lo, curLa, curLo, geser, tgl, bisaLolos };
   }
 
+  // Kelompok kunjungan yang paling padat: titik yang punya tetangga terbanyak
+  // di dalam radius, beserta tetangganya.
+  //
+  // Ini menggantikan "median dari semua kunjungan". Median semua kunjungan
+  // aman selama mayoritasnya mengumpul, tapi begitu ambangnya diturunkan ke
+  // sepertiga, mediannya bisa jatuh persis di antara dua kelompok — di tempat
+  // yang tidak pernah dikunjungi siapa pun. Pada data uji ada 32 outlet yang
+  // mediannya nyasar seperti itu; dengan cara ini, nol.
+  function kelompokTerpadat(vs, radius) {
+    let terbaik = null, isiTerbaik = -1;
+    for (const p of vs) {
+      const isi = vs.filter((q) => meter(p.la, p.lo, q.la, q.lo) <= radius);
+      if (isi.length > isiTerbaik) { isiTerbaik = isi.length; terbaik = isi; }
+    }
+    return terbaik && terbaik.length ? terbaik : vs;
+  }
+
   function hitungTitik() {
     const rg = rentangTanggal();
     // Rentang tanggal menentukan kunjungan mana yang DINILAI, bukan bukti mana
@@ -2127,8 +2151,10 @@
       // Satu kunjungan tidak bisa membuktikan apa-apa: tidak ada pembanding.
       if (vs.length < 2) { info.set(custno, { bucket: "SATU", n: 1 }); jml.satu++; continue; }
 
-      const mLat = median(vs.map((v) => v.la));
-      const mLon = median(vs.map((v) => v.lo));
+      // Titik usulan diambil dari kelompok terpadat, bukan dari semua kunjungan.
+      const inti = kelompokTerpadat(vs, set);
+      const mLat = median(inti.map((v) => v.la));
+      const mLon = median(inti.map((v) => v.lo));
       const jarak = vs.map((v) => meter(v.la, v.lo, mLat, mLon));
       // "Rapat" = kunjungan yang akan masuk radius izin kalau titik usulan
       // dipakai. Ukurannya memakai SETTING milik sistem, bukan angka sendiri.
@@ -2147,7 +2173,8 @@
       const salesmanBeda = new Set(vs.map((v) => v.r.salesmanEff).filter(Boolean)).size;
       const hariBeda = new Set(vs.map((v) => tglKunci(v.r.visitDate)).filter(Boolean)).size;
 
-      const mayoritas = rapat >= Math.max(2, Math.ceil(vs.length * 0.6));
+      const mayoritas = rapat >= Math.max(2, Math.ceil(vs.length * AMBANG_RAPAT));
+      const bagian = vs.length ? rapat / vs.length : 0;
       // Hanya diusulkan kalau titik yang sekarang memang bermasalah: belum
       // di-tag, atau letaknya di luar radius dari tempat kunjungan berkumpul.
       const salahSekarang = belumTag || geser > set;
@@ -2170,12 +2197,15 @@
       } else {
         const bisaLolos = jarak.filter((d) => d <= set).length;
         jml.dampak += bisaLolos;
+        // Keyakinan mengikuti seberapa besar bagian kunjungan yang mengumpul.
+        // Usulan dengan bagian kecil tetap ditampilkan — tapi jangan sampai
+        // terbaca sekuat yang seluruh kunjungannya sepakat.
         let yakin = "Rendah";
         if (rapat === vs.length && (vs.length >= 3 || salesmanBeda > 1)) yakin = "Tinggi";
-        else if (rapat === vs.length || rapat >= 3) yakin = "Sedang";
+        else if (bagian >= 0.6) yakin = "Sedang";
         info.set(custno, { bucket: "USUL", n: vs.length, rapat, sebar, mLat, mLon,
                            curLa, curLo, belumTag, geser, set, salesmanBeda, hariBeda,
-                           bisaLolos, yakin });
+                           bisaLolos, yakin, bagian });
         jml.usul++;
       }
     }
@@ -2206,6 +2236,34 @@
   // Isi kolom "Usulan Titik" pada baris kunjungan. Outlet yang semua
   // kunjungannya sudah IN RADIUS tidak punya isi — kolomnya sengaja dibiarkan
   // kosong supaya yang perlu ditindaklanjuti langsung menonjol.
+  // Satu kalimat yang menjelaskan seberapa kuat bukti di balik usulan, dan apa
+  // yang harus dilakukan orang yang membacanya. Dipakai di layar maupun di
+  // Excel supaya keduanya tidak pernah berbeda cerita.
+  function catatanUsulan(u) {
+    if (u.bucket === "KEMBALI") {
+      return `Koordinat ini dulu menghasilkan FLAG 1 di outlet yang sama`
+        + (u.tglLolos ? ` (${tglTampil(u.tglLolos)})` : "")
+        + `, lalu titiknya dipindah ${jarakTeks(u.geser)}. Bukti terkuat yang ada: `
+        + `angka ini sudah pernah dinyatakan lolos oleh sistem sendiri.`;
+    }
+    if (u.bucket !== "USUL") return "";
+    const pct = Math.round((u.bagian || 0) * 100);
+    const sisa = u.n - u.rapat;
+    const kuat = u.salesmanBeda > 1
+      ? ` Dikuatkan ${u.salesmanBeda} salesman berbeda di tempat yang sama.` : "";
+    if (u.yakin === "Tinggi") {
+      return `Semua ${u.n} kunjungan bermasalah jatuh di titik ini (sebaran ${jarakTeks(u.sebar)}).`
+        + kuat + ` Paling layak langsung diperbaiki.`;
+    }
+    if (u.yakin === "Sedang") {
+      return `${u.rapat} dari ${u.n} kunjungan (${pct}%) mengumpul di titik ini, ${sisa} menyebar.`
+        + kuat + ` Cocokkan dulu dengan alamat sebelum diubah.`;
+    }
+    return `Hanya ${u.rapat} dari ${u.n} kunjungan (${pct}%) yang mengumpul di titik ini; `
+      + `${sisa} lainnya menyebar.` + kuat + ` Titik ini pantas dicurigai, tapi buktinya tipis — `
+      + `periksa lewat peta dan alamat dulu, jangan langsung diubah di master.`;
+  }
+
   function titikSel(r) {
     // Kunjungan yang sudah IN RADIUS tidak perlu usulan apa-apa.
     if (r.flagRadius === "1") return "";
@@ -2236,10 +2294,11 @@
     // yang hafal arti koordinat — yang perlu langsung terbaca adalah "harus
     // diapakan", bukan "berapa derajat".
     return `<b class="titik-aksi">Titik toko perlu diperbaiki</b>`
-      + ` <span class="tag-cons yakin-${u.yakin}" title="${escapeHtml(TITIK_YAKIN[u.yakin])}">${u.yakin}</span>${kuat}`
+      + ` <span class="tag-cons yakin-${u.yakin}" title="${escapeHtml(catatanUsulan(u))}">${u.yakin}</span>${kuat}`
       + `<span class="titik-sub">`
       + (u.belumTag ? "titik toko belum diisi" : `meleset ${jarakTeks(u.geser)}`)
-      + ` &middot; ${u.rapat} dari ${u.n} kunjungan mengumpul di titik ini<br>`
+      + ` &middot; ${u.rapat} dari ${u.n} kunjungan (${Math.round((u.bagian || 0) * 100)}%)`
+      + ` mengumpul di titik ini<br>`
       + petaLink(u.mLat, u.mLon, `${u.mLat.toFixed(6)}, ${u.mLon.toFixed(6)}`)
       + `</span>`;
   }
@@ -2255,9 +2314,11 @@
       Salesman: r.salesmanEff,
       Rayon: r.rayonEff,
       "Alamat (DMP)": r.alamatEff || "",
+      Keyakinan: u.yakin,
+      Catatan: catatanUsulan(u),
       "Dasar Usulan": kembali
         ? `Koordinat ini menghasilkan FLAG 1 pada ${tglTampil(u.tglLolos)}`
-        : `${u.rapat} dari ${u.n} kunjungan mengumpul di titik ini`,
+        : `${u.rapat} dari ${u.n} kunjungan (${Math.round((u.bagian || 0) * 100)}%) mengumpul di titik ini`,
       "Sebaran (m)": u.sebar === undefined ? "" : u.sebar,
       "Lat Sekarang": u.belumTag ? "" : koordTeks(u.curLa),
       "Long Sekarang": u.belumTag ? "" : koordTeks(u.curLo),
@@ -2265,7 +2326,6 @@
       "Lat Usulan": koordTeks(u.mLat),
       "Long Usulan": koordTeks(u.mLon),
       "Geser (m)": u.geser === null || u.geser === undefined ? "" : u.geser,
-      Keyakinan: u.yakin,
       "Salesman Berbeda": u.salesmanBeda,
       "Kunjungan Jadi IN RADIUS": u.bisaLolos === undefined ? "" : u.bisaLolos,
       "Buka Peta": "Buka peta",

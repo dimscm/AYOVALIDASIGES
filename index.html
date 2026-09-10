@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>M3 Beverage Mayora</title>
-  <link rel="stylesheet" href="styles.css?v=37" />
+  <link rel="stylesheet" href="styles.css?v=38" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23c8102e'/%3E%3Ctext x='50' y='62' font-size='34' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EM3%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -123,9 +123,17 @@
               hanya kunjungan bermasalah (flag 0 dan blank) yang dipakai menghitung — dan titik
               penggantinya dihitung dari kunjungan itu sendiri. Klik koordinatnya untuk buka peta,
               lalu cocokkan dengan alamat sebelum diperbaiki di master.
-              Yang dianggap "mengumpul" adalah kunjungan yang akan masuk radius izin (kolom
-              SETTING di EDI) kalau titik usulan dipakai. Outlet yang kunjungannya tidak berkumpul
-              dipindah ke kelompok <b>"kunjungan berpencar"</b>, bukan dihilangkan.
+              Titik usulan diambil dari <b>kelompok kunjungan yang paling padat</b>, bukan dari
+              rata-rata semua kunjungan — supaya kalau kunjungannya terbelah dua tempat, usulannya
+              mendarat di salah satunya, bukan di tengah-tengah yang tidak pernah didatangi siapa pun.
+              Cukup <b>sepertiga</b> kunjungan bermasalah yang mengumpul (minimal dua) untuk
+              memunculkan usulan; sisanya dibedakan lewat kolom <b>Keyakinan</b>:
+              <span class="tag-cons yakin-Tinggi">Tinggi</span> semua kunjungan sepakat &middot;
+              <span class="tag-cons yakin-Sedang">Sedang</span> 60% ke atas &middot;
+              <span class="tag-cons yakin-Rendah">Rendah</span> di bawah itu — pantas dicurigai tapi
+              buktinya tipis, wajib dicek peta dan alamat dulu. Tiap baris punya <b>Catatan</b> yang
+              menuliskan alasannya dengan angka, di layar (arahkan kursor ke lencana keyakinan)
+              maupun di Excel.
               <b>Ini usulan, bukan koreksi otomatis:</b> kunjungan yang mengumpul rapat membuktikan
               <i>konsistensi</i>, bukan <i>kebenaran</i> — salesman yang selalu absen dari warung yang
               sama akan terlihat persis seperti ini. Tanda
@@ -409,13 +417,13 @@
       </section>
     </div>
 
-    <p class="credit">dimscm &middot; v37</p>
+    <p class="credit">dimscm &middot; v38</p>
   </main>
 
   <script src="vendor/xlsx.full.min.js"></script>
   <script src="vendor/jszip.min.js"></script>
   <script src="vendor/7zz.umd.js"></script>
-  <script src="app.js?v=37"></script>
-  <script src="dash2.js?v=37"></script>
+  <script src="app.js?v=38"></script>
+  <script src="dash2.js?v=38"></script>
 </body>
 </html>
