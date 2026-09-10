@@ -1340,7 +1340,11 @@
 
   // Base set for the summary: salesman + search + inkonsisten toggle, but NOT category.
   // (Summary is the category breakdown itself.)
-  function getBaseFiltered() {
+  // opsi.abaikanHht — pakai semua kunjungan tanpa memandang cakupan HHT.
+  // Dipakai daftar kerja yang sumbernya EDI saja (usulan titik, radius di
+  // lembar cetak): kunjungan yang scan-nya tidak bisa dinilai tetap punya
+  // koordinat dan flag radius yang sah, jadi tidak boleh ikut terpotong.
+  function getBaseFiltered(opsi) {
     const q = $("search").value.trim().toLowerCase();
     const sms = getSelectedSalesmen();
     const rys = getSelectedRayon();
@@ -1351,7 +1355,7 @@
     const rg = rentangTanggal();
     return state.results.filter((r) => {
       if (!dalamRentang(r, rg)) return false;
-      if (hanyaHht && r.diLuarHht) return false;
+      if (hanyaHht && r.diLuarHht && !(opsi && opsi.abaikanHht)) return false;
       if (pers.size > 0 && !pers.has(r.periodeEff)) return false;
       if (onlyMixed && r.consistency !== "MIXED") return false;
       const bc = $("filterBarcode") ? $("filterBarcode").value : "";
@@ -1832,7 +1836,7 @@
   // Daftar usulan titik: satu baris per outlet, bukan per kunjungan.
   function daftarUsulan() {
     const sudah = new Set(), usulan = [];
-    for (const r of state.filtered) {
+    for (const r of barisKerja()) {
       const u = state.titikByOutlet && state.titikByOutlet.get(r.custno);
       if (!u || (u.bucket !== "USUL" && u.bucket !== "KEMBALI") || sudah.has(r.custno)) continue;
       sudah.add(r.custno);
@@ -1871,12 +1875,21 @@
     return ws;
   }
 
+  // Baris untuk daftar kerja: penyaring yang dipilih pengguna tetap dihormati
+  // (salesman, rayon, tanggal, kategori), kecuali cakupan HHT. Kategori tetap
+  // ikut karena itu pilihan sadar pengguna.
+  function barisKerja() {
+    const base = getBaseFiltered({ abaikanHht: true });
+    const cats = getSelectedCategories();
+    return cats.size === 0 ? base : base.filter((r) => cats.has(r.category));
+  }
+
   // Daftar kerja barcode: satu baris per outlet, hanya yang perlu ditindaklanjuti.
   // Yang sudah beres sendiri sengaja tidak ikut — itu justru inti gunanya.
   function daftarBarcode() {
     if (!state.barcodeByOutlet || !state.barcodeByOutlet.size) return [];
     const sudah = new Set(), keluar = [];
-    for (const r of state.filtered) {
+    for (const r of barisKerja()) {
       const u = state.barcodeByOutlet.get(r.custno);
       if (!u || (u.bucket !== "BARU" && u.bucket !== "BELUM") || sudah.has(r.custno)) continue;
       sudah.add(r.custno);
@@ -1955,7 +1968,7 @@
     // Dikelompokkan per salesman yang BERKUNJUNG — dialah yang akan ditanya.
     const perSls = new Map();
     const outletRows = new Map();
-    for (const r of state.filtered) {
+    for (const r of barisKerja()) {
       let arr = outletRows.get(r.custno);
       if (!arr) { arr = []; outletRows.set(r.custno, arr); }
       arr.push(r);
@@ -2032,7 +2045,20 @@
           + `— satu halaman per salesman. Di jendela cetak pilih "Simpan sebagai PDF" kalau `
           + `ingin filenya, atau langsung cetak.`
         : "Tidak ada outlet bermasalah pada penyaring yang dipilih, jadi tidak ada yang dicetak.");
-      if (jml) setTimeout(() => window.print(), 60);
+      // Tanpa saringan, satu area bisa jadi ratusan halaman. Ditanya dulu
+      // daripada jendela cetak terbuka dengan tumpukan kertas yang tidak
+      // disengaja — apalagi web ini dipakai bergantian banyak orang.
+      if (!jml) return;
+      const BATAS_HALAMAN = 25;
+      if (jml > BATAS_HALAMAN
+          && !window.confirm(`Lembar ini akan jadi ${jml} halaman (${outlet.toLocaleString("id-ID")} `
+            + `outlet). Saring dulu rayon atau salesmannya kalau tidak sengaja mencetak sebanyak `
+            + `itu.\n\nLanjutkan mencetak?`)) {
+        pesanExport(`Dibatalkan. Saring dulu rayon atau salesman di atas, lalu tekan `
+          + `"Cetak per Salesman" lagi.`);
+        return;
+      }
+      setTimeout(() => window.print(), 60);
     });
   }
 
