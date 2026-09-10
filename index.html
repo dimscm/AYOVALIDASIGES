@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>M3 Beverage Mayora</title>
-  <link rel="stylesheet" href="styles.css?v=46" />
+  <link rel="stylesheet" href="styles.css?v=47" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23c8102e'/%3E%3Ctext x='50' y='62' font-size='34' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EM3%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -193,6 +193,29 @@
               dinilai — berguna kalau validasi baru diperbaiki belakangan dan masalah di tanggal lama
               sudah tidak relevan. Buktinya tidak ikut dipotong: kunjungan lama yang dulu lolos tetap
               dipakai sebagai acuan koordinat yang benar, justru karena itu yang paling bisa dipercaya.</p>
+            <p class="hnote"><b>Kolom "Masalah Outlet"</b> menjawab dalam satu kalimat: masalahnya
+              di <b>radius</b>, di <b>barcode</b>, atau <b>dua-duanya</b> — dan apakah begitu terus
+              atau kadang-kadang saja. <b>"Inkonsisten"</b> berarti kadang benar kadang salah;
+              inilah yang paling pantas ditanyakan ke salesman, karena buktinya ada di dua sisi.
+              <b>"Konsisten bermasalah"</b> berarti tidak pernah benar sekali pun di periode ini —
+              biasanya bukan salah orangnya, tapi datanya: titik toko keliru, atau barcodenya
+              memang belum terpasang. Isinya cuma delapan kemungkinan, jadi di Excel tinggal
+              disaring:</p>
+            <div class="hgrid">
+              <div class="h-item warn"><b>Inkonsisten radius</b><span>Kadang IN RADIUS kadang tidak. Barcode aman.</span></div>
+              <div class="h-item warn"><b>Inkonsisten barcode</b><span>Barcode kadang berhasil discan kadang tidak. Radius aman.</span></div>
+              <div class="h-item warn"><b>Inkonsisten keduanya</b><span>Radius dan barcode sama-sama kadang benar kadang tidak.</span></div>
+              <div class="h-item bad"><b>Konsisten bermasalah radius</b><span>Tidak sekali pun IN RADIUS. Barcode aman.</span></div>
+              <div class="h-item bad"><b>Konsisten bermasalah barcode</b><span>Barcode tidak pernah berhasil discan. Radius aman.</span></div>
+              <div class="h-item bad"><b>Konsisten bermasalah keduanya</b><span>Tidak pernah IN RADIUS, barcode juga tidak pernah berhasil.</span></div>
+              <div class="h-item bad"><b>Konsisten bermasalah radius + inkonsisten barcode</b><span>Radius tidak pernah lolos, barcode kadang berhasil.</span></div>
+              <div class="h-item bad"><b>Konsisten bermasalah barcode + inkonsisten radius</b><span>Barcode tidak pernah berhasil, radius kadang lolos.</span></div>
+            </div>
+            <p class="hnote">Sel yang <b>kosong</b> berarti kedua sisinya aman — tidak ada yang perlu
+              dikerjakan di outlet itu. Outlet yang <b>baru sekali dikunjungi</b> tidak dinilai sisi
+              radiusnya: satu kali OUT RADIUS belum tentu pola. Kalau file HHT tidak diupload, atau
+              outletnya tidak tercakup file itu, sisi barcodenya memang tidak bisa dinilai — jadi
+              yang disebut hanya sisi radius.</p>
             <p class="hnote"><b>Konsistensi</b> membandingkan semua kunjungan di outlet yang sama:
               <span class="tag-cons cons-VALID">Konsisten Valid</span> semua kunjungan IN RADIUS &middot;
               <span class="tag-cons cons-PROBLEM">Konsisten Bermasalah</span> semua OUT RADIUS/BLANK &middot;
@@ -303,6 +326,7 @@
               <tr>
                 <th>Kategori</th>
                 <th class="col-x">Konsistensi</th>
+                <th>Masalah Outlet</th>
                 <th>Kode Outlet</th>
                 <th>Nama Toko</th>
                 <th>Salesman</th>
@@ -465,7 +489,7 @@
       </section>
     </div>
 
-    <p class="credit">dimscm &middot; v46</p>
+    <p class="credit">dimscm &middot; v47</p>
   </main>
 
   <!-- Lembar cetak per salesman. Disusun saat tombol Cetak ditekan, dan hanya
@@ -475,7 +499,7 @@
   <script src="vendor/xlsx.full.min.js"></script>
   <script src="vendor/jszip.min.js"></script>
   <script src="vendor/7zz.umd.js"></script>
-  <script src="app.js?v=46"></script>
-  <script src="dash2.js?v=46"></script>
+  <script src="app.js?v=47"></script>
+  <script src="dash2.js?v=47"></script>
 </body>
 </html>

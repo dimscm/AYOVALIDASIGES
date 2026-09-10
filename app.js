@@ -29,6 +29,33 @@
     "MIXED":   { label: "⚠ Inkonsisten",     hint: "Kadang IN, kadang OUT/BLANK. Prioritas investigasi — cek koordinat, atau kunjungan salah." },
   };
 
+  // Kolom "Masalah Outlet": menjawab satu pertanyaan yang selama ini harus
+  // dirangkai sendiri dari dua kolom — masalahnya di radius, di barcode, atau
+  // dua-duanya, dan apakah selalu begitu atau kadang-kadang saja.
+  //   "Inkonsisten"         = kadang benar kadang salah -> paling layak ditanya
+  //                           ke salesman, karena buktinya ada di dua sisi.
+  //   "Konsisten bermasalah" = tidak pernah benar sekali pun di periode ini.
+  // Outlet yang kedua sisinya aman sengaja dibiarkan kosong, supaya yang perlu
+  // dikerjakan langsung menonjol.
+  const MASALAH_INFO = {
+    MIX_R:    { label: "Inkonsisten radius", tone: "mix",
+                hint: "Kunjungan ke outlet ini kadang IN RADIUS kadang tidak. Barcodenya aman." },
+    MIX_B:    { label: "Inkonsisten barcode", tone: "mix",
+                hint: "Barcode outlet ini kadang berhasil discan kadang tidak. Radiusnya aman." },
+    MIX_RB:   { label: "Inkonsisten keduanya", tone: "mix",
+                hint: "Radius maupun barcode sama-sama kadang benar kadang tidak." },
+    TETAP_R:  { label: "Konsisten bermasalah radius", tone: "tetap",
+                hint: "Tidak ada satu pun kunjungan yang IN RADIUS. Barcodenya aman." },
+    TETAP_B:  { label: "Konsisten bermasalah barcode", tone: "tetap",
+                hint: "Barcodenya tidak pernah sekali pun berhasil discan. Radiusnya aman." },
+    TETAP_RB: { label: "Konsisten bermasalah keduanya", tone: "tetap",
+                hint: "Tidak pernah IN RADIUS, dan barcodenya tidak pernah berhasil discan." },
+    CAMPUR_R: { label: "Konsisten bermasalah radius + inkonsisten barcode", tone: "tetap",
+                hint: "Radius tidak pernah lolos; barcodenya kadang berhasil kadang tidak." },
+    CAMPUR_B: { label: "Konsisten bermasalah barcode + inkonsisten radius", tone: "tetap",
+                hint: "Barcode tidak pernah berhasil; radiusnya kadang lolos kadang tidak." },
+  };
+
   // Header aliases per column (uppercase compare, trimmed).
   const EDI_MAP = {
     kodeCabang:  ["KODE CABANG"],
@@ -1517,6 +1544,7 @@
       return `<tr class="${dup ? "row-dup" : ""}">
         <td><span class="tag tag-${r.category}">${escapeHtml(info.label)}</span></td>
         <td class="col-x${dup ? " dupcell" : ""}">${consTag}</td>
+        <td class="masalah">${dup ? "" : masalahSel(r)}</td>
         <td class="mono${dup ? " dupcell" : ""}">${nomor}</td>
         <td class="${dup ? "dupcell" : ""}">${nama}</td>
         <td class="${dup ? "dupcell" : ""}">${sls}</td>
@@ -1538,7 +1566,7 @@
     }).join("");
 
     if (!slice.length) {
-      tbody.innerHTML = `<tr><td colspan="19" class="empty">Tidak ada baris yang cocok dengan filter ini.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="20" class="empty">Tidak ada baris yang cocok dengan filter ini.</td></tr>`;
     }
 
     stampLabels(document.getElementById("resultTable"));
@@ -1726,7 +1754,7 @@
   // langsung terbuka di Excel.
   const BATAS_XLSX = 30000;
 
-  const KEPALA_HASIL = ["Kategori", "Konsistensi", "Jumlah Kunjungan Outlet", "Kode Outlet",
+  const KEPALA_HASIL = ["Kategori", "Konsistensi", "Masalah Outlet", "Jumlah Kunjungan Outlet", "Kode Outlet",
     "Nama Toko", "Salesman", "Salesman DMP", "Rayon (Team)", "Cycle", "Alamat Toko", "Visit Date",
     "Jam Masuk", "Jam Keluar", "Flag Radius", "Distance", "Lat Visit", "Long Visit",
     "Lat Val", "Long Val", "HHT", "Tipe Scan", "Alasan HHT", "Alasan Dari Tanggal",
@@ -1763,8 +1791,9 @@
       : u.bucket === "PAS" && u.sebab === "diperbaiki" ? "Sudah diperbaiki setelah tanggal ini"
       : TITIK_TEKS[u.bucket] || "";
     const adaUsulan = u && (u.bucket === "USUL" || u.bucket === "KEMBALI");
+    const masalah = sisiMasalah(r);
     return [
-      info.label, cons.label, r.visitCount, r.custno, r.namaTokoEff, r.salesmanEff, r.salesmanDmp,
+      info.label, cons.label, masalah ? MASALAH_INFO[masalah].label : "", r.visitCount, r.custno, r.namaTokoEff, r.salesmanEff, r.salesmanDmp,
       r.rayonEff, r.cycleEff, r.alamatEff, r.visitDate || "", r.jamin || "", r.jamout || "",
       r.flagRadius || "BLANK", r.distance ?? "", r.latVisit ?? "", r.longVisit ?? "",
       r.latVal ?? "", r.longVal ?? "",
@@ -2464,6 +2493,35 @@
           + (u.alasan ? ` &middot; ${escapeHtml(u.alasan)}` : "");
     return `<span class="tag tag-bc-${u.bucket}" title="${escapeHtml(info.hint)}">${info.label}</span>`
       + `<span class="titik-sub">${rinci}</span>`;
+  }
+
+  // Menggabungkan dua penilaian yang sudah ada — konsistensi radius (dari EDI)
+  // dan riwayat scan barcode (dari HHT) — jadi satu jawaban.
+  // Radius: MIXED = kadang, PROBLEM = selalu. Kunjungan tunggal (SINGLE) tidak
+  // dinilai; satu kali OUT RADIUS belum tentu pola.
+  // Barcode: BELUM = tidak pernah berhasil, BARU/BERES = kadang berhasil kadang
+  // tidak. Tanpa file HHT, atau outletnya tidak tercakup file itu, sisi barcode
+  // memang tidak bisa dinilai — jadi yang disebut hanya sisi radius.
+  function sisiMasalah(r) {
+    const rad = r.consistency === "MIXED" ? "kadang"
+      : r.consistency === "PROBLEM" ? "selalu" : "";
+    const bc = state.barcodeByOutlet ? state.barcodeByOutlet.get(r.custno) : null;
+    const bar = !bc ? ""
+      : bc.bucket === "BELUM" ? "selalu"
+      : (bc.bucket === "BARU" || bc.bucket === "BERES") ? "kadang" : "";
+    if (!rad && !bar) return "";
+    if (rad && !bar) return rad === "kadang" ? "MIX_R" : "TETAP_R";
+    if (!rad && bar) return bar === "kadang" ? "MIX_B" : "TETAP_B";
+    if (rad === bar) return rad === "kadang" ? "MIX_RB" : "TETAP_RB";
+    return rad === "selalu" ? "CAMPUR_R" : "CAMPUR_B";
+  }
+
+  function masalahSel(r) {
+    const k = sisiMasalah(r);
+    if (!k) return "";
+    const info = MASALAH_INFO[k];
+    return `<span class="tag masalah-${info.tone}" title="${escapeHtml(info.hint)}">`
+      + `${escapeHtml(info.label)}</span>`;
   }
 
   function hitungTitik() {
