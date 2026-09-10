@@ -1852,6 +1852,21 @@
 
   const RADIUS_DEFAULT = 50;
 
+  // Dua angka yang berbeda dan gampang tertukar:
+  //
+  //  RADIUS_DEFAULT / SETTING — radius izin milik sistem. Dipakai untuk dua
+  //    hal: menilai apakah titik master sekarang memang salah, dan menghitung
+  //    berapa kunjungan yang akan lolos kalau usulan dipakai. Ini bukan angka
+  //    kita, jadi tidak boleh diutak-atik.
+  //
+  //  TOLERANSI_RAPAT — seberapa rapat kunjungan harus berkumpul sebelum
+  //    titik usulannya layak dipercaya. Ini angka kita sendiri, dan sengaja
+  //    jauh lebih ketat dari radius izin: kunjungan yang tersebar 40 m masih
+  //    "lolos radius", tapi sebagai penunjuk letak toko ia terlalu kabur.
+  //    Dengan 10 m, usulan yang lolos punya sebaran paling jauh 8 m pada data
+  //    uji — cukup rapat untuk dianggap menunjuk satu bangunan.
+  const TOLERANSI_RAPAT = 10;
+
   const TITIK_YAKIN = {
     Tinggi: "Semua kunjungan jatuh di titik usulan, dan dikuatkan banyak hari atau lebih dari satu salesman. Paling layak langsung diperbaiki.",
     Sedang: "Semua kunjungan jatuh di titik usulan, tapi buktinya masih sedikit. Cek dulu alamatnya.",
@@ -1909,8 +1924,12 @@
   const petaToko = (la, lo) =>
     `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${la.toFixed(6)},${lo.toFixed(6)}`;
 
+  // Koordinatnya sendiri jadi tautan ke peta, ditambah satu tautan Street View
+  // di sebelahnya. Tidak perlu tulisan "buka peta" lagi — koordinat bergaris
+  // bawah sudah cukup jelas, dan barisnya jadi lebih pendek.
   function petaLink(la, lo, teks) {
-    return `<a class="maplink" href="${petaPin(la, lo)}" target="_blank" rel="noopener">${teks}</a>`
+    return `<a class="maplink" href="${petaPin(la, lo)}" target="_blank" rel="noopener"`
+      + ` title="Buka titik ini di Google Maps">${teks}</a>`
       + ` &middot; <a class="maplink" href="${petaToko(la, lo)}" target="_blank" rel="noopener"`
       + ` title="Street View — lihat muka tokonya, kalau jalannya pernah difoto">lihat toko</a>`;
   }
@@ -2051,8 +2070,9 @@
       const mLat = median(vs.map((v) => v.la));
       const mLon = median(vs.map((v) => v.lo));
       const jarak = vs.map((v) => meter(v.la, v.lo, mLat, mLon));
-      // "Rapat" = kunjungan yang akan lolos radius kalau titik usulan dipakai.
-      const dekat = jarak.filter((d) => d <= set);
+      // "Rapat" = kunjungan yang benar-benar berkumpul di titik usulan, diukur
+      // dengan toleransi kita yang ketat — bukan dengan radius izin.
+      const dekat = jarak.filter((d) => d <= TOLERANSI_RAPAT);
       const rapat = dekat.length;
       const sebar = Math.round(rapat ? Math.max(...dekat) : Math.max(...jarak));
 
@@ -2088,7 +2108,11 @@
         info.set(custno, { bucket: "PAS", sebab: "pas", n: vs.length, geser, curLa, curLo });
         jml.pas++;
       } else {
-        const bisaLolos = rapat;   // semua yang dipakai memang kunjungan bermasalah
+        // Yang dihitung di sini pertanyaan yang berbeda: berapa kunjungan
+        // bermasalah yang akan masuk RADIUS IZIN kalau titik usulan dipakai.
+        // Angkanya bisa lebih besar dari "rapat", karena radius izin (50 m)
+        // lebih longgar daripada toleransi mengumpul (10 m).
+        const bisaLolos = jarak.filter((d) => d <= set).length;
         jml.dampak += bisaLolos;
         let yakin = "Rendah";
         if (rapat === vs.length && (vs.length >= 3 || salesmanBeda > 1)) yakin = "Tinggi";
@@ -2149,8 +2173,8 @@
         + ` <span class="tag-cons yakin-Tinggi" title="Koordinat ini dulu menghasilkan FLAG 1 di outlet yang sama. Bukan tebakan dari sebaran kunjungan — sistem sendiri yang sudah menyatakannya lolos.">Tinggi</span>${kuat}`
         + `<span class="titik-sub">titik dipindah ${jarakTeks(u.geser)} dari titik lama${kapan}`
         + ` &middot; ${u.bisaLolos} kunjungan akan lolos lagi<br>`
-        + petaLink(u.mLat, u.mLon, `${u.mLat.toFixed(6)}, ${u.mLon.toFixed(6)}`)
-        + ` &mdash; titik lama, buka peta</span>`;
+        + `titik lama: ` + petaLink(u.mLat, u.mLon, `${u.mLat.toFixed(6)}, ${u.mLon.toFixed(6)}`)
+        + `</span>`;
     }
     // Kalimatnya dulu, angkanya belakangan. Yang membaca tabel ini bukan orang
     // yang hafal arti koordinat — yang perlu langsung terbaca adalah "harus
@@ -2159,9 +2183,9 @@
       + ` <span class="tag-cons yakin-${u.yakin}" title="${escapeHtml(TITIK_YAKIN[u.yakin])}">${u.yakin}</span>${kuat}`
       + `<span class="titik-sub">`
       + (u.belumTag ? "titik toko belum diisi" : `meleset ${jarakTeks(u.geser)}`)
-      + ` &middot; ${u.rapat} dari ${u.n} kunjungan mengumpul di sini<br>`
+      + ` &middot; ${u.rapat} dari ${u.n} kunjungan mengumpul dalam ${TOLERANSI_RAPAT} m<br>`
       + petaLink(u.mLat, u.mLon, `${u.mLat.toFixed(6)}, ${u.mLon.toFixed(6)}`)
-      + ` &mdash; buka peta</span>`;
+      + `</span>`;
   }
 
   // Baris untuk sheet "Usulan Titik": satu baris per outlet, bukan per
@@ -2177,7 +2201,7 @@
       "Alamat (DMP)": r.alamatEff || "",
       "Dasar Usulan": kembali
         ? `Koordinat ini menghasilkan FLAG 1 pada ${tglTampil(u.tglLolos)}`
-        : `${u.rapat} dari ${u.n} kunjungan mengumpul di titik ini`,
+        : `${u.rapat} dari ${u.n} kunjungan mengumpul dalam ${TOLERANSI_RAPAT} m dari titik ini`,
       "Sebaran (m)": u.sebar === undefined ? "" : u.sebar,
       "Lat Sekarang": u.belumTag ? "" : koordTeks(u.curLa),
       "Long Sekarang": u.belumTag ? "" : koordTeks(u.curLo),
