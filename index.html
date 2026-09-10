@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>M3 Beverage Mayora</title>
-  <link rel="stylesheet" href="styles.css?v=34" />
+  <link rel="stylesheet" href="styles.css?v=36" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23c8102e'/%3E%3Ctext x='50' y='62' font-size='34' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EM3%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -123,11 +123,9 @@
               hanya kunjungan bermasalah (flag 0 dan blank) yang dipakai menghitung — dan titik
               penggantinya dihitung dari kunjungan itu sendiri. Klik koordinatnya untuk buka peta,
               lalu cocokkan dengan alamat sebelum diperbaiki di master.
-              Yang dianggap "mengumpul" adalah kunjungan yang jaraknya
-              <b class="tol-rapat">25 meter</b> atau kurang dari titik usulan — sengaja lebih ketat
-              daripada radius izin 50 meter. Kunjungan yang tersebar 40 meter memang masih lolos
-              radius, tapi sebagai penunjuk letak toko ia terlalu kabur. Outlet yang tidak selulus itu dipindah ke kelompok <b>"kunjungan berpencar"</b>,
-              bukan dihilangkan.
+              Yang dianggap "mengumpul" adalah kunjungan yang akan masuk radius izin (kolom
+              SETTING di EDI) kalau titik usulan dipakai. Outlet yang kunjungannya tidak berkumpul
+              dipindah ke kelompok <b>"kunjungan berpencar"</b>, bukan dihilangkan.
               <b>Ini usulan, bukan koreksi otomatis:</b> kunjungan yang mengumpul rapat membuktikan
               <i>konsistensi</i>, bukan <i>kebenaran</i> — salesman yang selalu absen dari warung yang
               sama akan terlihat persis seperti ini. Tanda
@@ -410,13 +408,13 @@
       </section>
     </div>
 
-    <p class="credit">dimscm &middot; v34</p>
+    <p class="credit">dimscm &middot; v36</p>
   </main>
 
   <script src="vendor/xlsx.full.min.js"></script>
   <script src="vendor/jszip.min.js"></script>
   <script src="vendor/7zz.umd.js"></script>
-  <script src="app.js?v=34"></script>
-  <script src="dash2.js?v=34"></script>
+  <script src="app.js?v=36"></script>
+  <script src="dash2.js?v=36"></script>
 </body>
 </html>

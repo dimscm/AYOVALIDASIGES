@@ -1852,30 +1852,6 @@
 
   const RADIUS_DEFAULT = 50;
 
-  // Dua angka yang berbeda dan gampang tertukar:
-  //
-  //  RADIUS_DEFAULT / SETTING — radius izin milik sistem. Dipakai untuk dua
-  //    hal: menilai apakah titik master sekarang memang salah, dan menghitung
-  //    berapa kunjungan yang akan lolos kalau usulan dipakai. Ini bukan angka
-  //    kita, jadi tidak boleh diutak-atik.
-  //
-  //  TOLERANSI_RAPAT — seberapa rapat kunjungan harus berkumpul sebelum
-  //    titik usulannya layak dipercaya. Ini angka kita sendiri, dan sengaja
-  //    jauh lebih ketat dari radius izin: kunjungan yang tersebar 40 m masih
-  //    "lolos radius", tapi sebagai penunjuk letak toko ia terlalu kabur.
-  //    Pada data uji, usulan yang lolos dengan angka ini punya sebaran paling
-  //    jauh 18 m — masih dalam ukuran satu bangunan beserta halamannya.
-  const TOLERANSI_RAPAT = 25;
-
-  // Angka toleransi di teks bantuan diisi dari kode. Sudah dua kali angkanya
-  // berubah; kalau ditulis manual di HTML, cepat atau lambat penjelasannya
-  // akan berbeda dari aturan yang benar-benar dipakai. Harus ditulis di bawah
-  // konstantanya: const tidak ter-hoisting, memakainya lebih awal membuat
-  // seluruh skrip gagal dimuat dan halaman mati tanpa pesan apa pun.
-  document.querySelectorAll(".tol-rapat").forEach((el) => {
-    el.textContent = `${TOLERANSI_RAPAT} meter`;
-  });
-
   const TITIK_YAKIN = {
     Tinggi: "Semua kunjungan jatuh di titik usulan, dan dikuatkan banyak hari atau lebih dari satu salesman. Paling layak langsung diperbaiki.",
     Sedang: "Semua kunjungan jatuh di titik usulan, tapi buktinya masih sedikit. Cek dulu alamatnya.",
@@ -2079,9 +2055,9 @@
       const mLat = median(vs.map((v) => v.la));
       const mLon = median(vs.map((v) => v.lo));
       const jarak = vs.map((v) => meter(v.la, v.lo, mLat, mLon));
-      // "Rapat" = kunjungan yang benar-benar berkumpul di titik usulan, diukur
-      // dengan toleransi kita yang ketat — bukan dengan radius izin.
-      const dekat = jarak.filter((d) => d <= TOLERANSI_RAPAT);
+      // "Rapat" = kunjungan yang akan masuk radius izin kalau titik usulan
+      // dipakai. Ukurannya memakai SETTING milik sistem, bukan angka sendiri.
+      const dekat = jarak.filter((d) => d <= set);
       const rapat = dekat.length;
       const sebar = Math.round(rapat ? Math.max(...dekat) : Math.max(...jarak));
 
@@ -2117,10 +2093,6 @@
         info.set(custno, { bucket: "PAS", sebab: "pas", n: vs.length, geser, curLa, curLo });
         jml.pas++;
       } else {
-        // Yang dihitung di sini pertanyaan yang berbeda: berapa kunjungan
-        // bermasalah yang akan masuk RADIUS IZIN kalau titik usulan dipakai.
-        // Angkanya bisa lebih besar dari "rapat", karena radius izin (50 m)
-        // lebih longgar daripada toleransi mengumpul (10 m).
         const bisaLolos = jarak.filter((d) => d <= set).length;
         jml.dampak += bisaLolos;
         let yakin = "Rendah";
@@ -2192,7 +2164,7 @@
       + ` <span class="tag-cons yakin-${u.yakin}" title="${escapeHtml(TITIK_YAKIN[u.yakin])}">${u.yakin}</span>${kuat}`
       + `<span class="titik-sub">`
       + (u.belumTag ? "titik toko belum diisi" : `meleset ${jarakTeks(u.geser)}`)
-      + ` &middot; ${u.rapat} dari ${u.n} kunjungan mengumpul dalam ${TOLERANSI_RAPAT} m<br>`
+      + ` &middot; ${u.rapat} dari ${u.n} kunjungan mengumpul di titik ini<br>`
       + petaLink(u.mLat, u.mLon, `${u.mLat.toFixed(6)}, ${u.mLon.toFixed(6)}`)
       + `</span>`;
   }
@@ -2210,7 +2182,7 @@
       "Alamat (DMP)": r.alamatEff || "",
       "Dasar Usulan": kembali
         ? `Koordinat ini menghasilkan FLAG 1 pada ${tglTampil(u.tglLolos)}`
-        : `${u.rapat} dari ${u.n} kunjungan mengumpul dalam ${TOLERANSI_RAPAT} m dari titik ini`,
+        : `${u.rapat} dari ${u.n} kunjungan mengumpul di titik ini`,
       "Sebaran (m)": u.sebar === undefined ? "" : u.sebar,
       "Lat Sekarang": u.belumTag ? "" : koordTeks(u.curLa),
       "Long Sekarang": u.belumTag ? "" : koordTeks(u.curLo),
