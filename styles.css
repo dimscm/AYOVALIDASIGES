@@ -689,14 +689,34 @@ tr.row-dup .dupcell { visibility: hidden; }
   #cetak .no { width: 20px; text-align: right; color: #666; }
   #cetak .kode { width: 58px; font-family: ui-monospace, Menlo, monospace; font-size: 8.5pt; }
   #cetak .isian { width: 78px; }
+  /* Kolom ini menampung QR 16mm di sebelah teksnya. Tanpa lebar yang
+     dipastikan, browser memepetnya sampai koordinatnya patah tiap dua angka. */
+  #cetak .kejadian { width: 52mm; }
   #cetak .cek { width: 34px; text-align: center; }
   /* Kotak centangnya saja yang besar — judul kolomnya tetap seukuran yang lain. */
   #cetak td.cek { font-size: 13pt; color: #666; }
   #cetak .kecil { display: block; font-size: 7.5pt; color: #555; margin-top: 1px; }
   #cetak .berat { font-weight: 700; }
+  /* "8 dari 10 kunjungan" dijaga tetap satu kesatuan — kalau patah di tengah,
+     angkanya terbaca sebagai dua hal yang berbeda. */
+  #cetak .rasio { white-space: nowrap; }
   /* Tautan dibiarkan hitam supaya tidak terbaca sebagai coretan di kertas,
      tapi tetap bisa diklik saat lembar ini dibuka sebagai PDF. */
   #cetak a { color: #111; text-decoration: none; border-bottom: 0.5pt dotted #888; }
+
+  /* ---- QR posisi absen ----
+     Ada supaya lembar yang benar-benar dicetak tetap bisa dibuka di peta:
+     di kertas tautan tidak bisa diklik, dan PDF yang dibuat dari HP umumnya
+     membuang tautannya. Ditaruh mengapung di kanan sel supaya tingginya
+     menumpang pada teks yang sudah ada — kalau ditaruh sebagai baris sendiri,
+     tiap outlet bertambah belasan milimeter dan jumlah halamannya berlipat.
+     Ruang putih di sekelilingnya (quiet zone) wajib ada, kalau tidak kameranya
+     sering gagal mengunci. */
+  #cetak .qr {
+    float: right; width: 16mm; height: 16mm; margin: 0 0 1mm 2mm;
+    padding: 1.5mm; background: #fff; box-sizing: border-box;
+  }
+  #cetak .qr svg { display: block; width: 100%; height: 100%; }
 
   /* ---- Kaki ---- */
   .cetak-ttd { margin-top: 16px; font-size: 8.5pt; display: flex; gap: 26px; }

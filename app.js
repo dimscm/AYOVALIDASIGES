@@ -1977,15 +1977,19 @@
       // disebut juga — artinya titik tokonya terbukti masih bisa kena, jadi
       // pertanyaannya ke salesman pun berbeda.
       const dalam = rows.length - luar.length;
-      masalah.push(`<b class="berat">Di luar radius</b> ${luar.length} dari ${rows.length} kunjungan`
+      masalah.push(`<b class="berat">Di luar radius</b> `
+        + `<span class="rasio">${luar.length} dari ${rows.length} kunjungan</span>`
         + (tgl.length || dalam
             ? `<span class="kecil">${awalan}${escapeHtml(tgl.join(", "))}`
               + (tgl.length && dalam ? " &middot; " : "")
               + (dalam ? `${dalam} kunjungan lain in radius` : "") + `</span>`
             : "")
-        + (pos ? `<span class="kecil">absen terakhir ${escapeHtml(pos.tgl)}: `
-            + `<a href="${petaPin(pos.la, pos.lo)}">${pos.la.toFixed(5)}, ${pos.lo.toFixed(5)}</a>`
-            + `</span>` : ""));
+        + (pos
+            ? qrSvg(petaPendek(pos.la, pos.lo), "Scan: posisi absen terakhir di peta")
+              + `<span class="kecil">absen terakhir ${escapeHtml(pos.tgl)}: `
+              + `<a href="${petaPin(pos.la, pos.lo)}">${pos.la.toFixed(5)}, ${pos.lo.toFixed(5)}</a>`
+              + `</span>`
+            : ""));
       if (u && u.bucket === "TANYA")
         tanya.push("Absen tercatat berpencar &mdash; posisi toko sebenarnya di mana?");
       else if (u && (u.bucket === "USUL" || u.bucket === "KEMBALI"))
@@ -2055,13 +2059,13 @@
         + `<span class="chip kuat">${g.baris.length} outlet</span></span></div>`
         + `</header>`
         + `<table><thead><tr><th class="no">#</th><th class="kode">Kode</th>`
-        + `<th>Nama Toko</th><th>Yang Terjadi</th><th>Yang Perlu Ditanyakan</th>`
+        + `<th>Nama Toko</th><th class="kejadian">Yang Terjadi</th><th>Yang Perlu Ditanyakan</th>`
         + `<th class="isian">Jawaban / Tindakan</th><th class="cek">Selesai</th></tr></thead><tbody>`;
       g.baris.forEach((b, i) => {
         html += `<tr><td class="no">${i + 1}</td><td class="kode">${escapeHtml(b.custno)}</td>`
           + `<td><b>${escapeHtml(b.nama || "")}</b>`
           + (b.alamat ? `<span class="kecil">${escapeHtml(b.alamat)}</span>` : "") + `</td>`
-          + `<td>${b.masalah.join("<br>")}</td>`
+          + `<td class="kejadian">${b.masalah.join("<br>")}</td>`
           + `<td>${b.tanya.join("<br>")}</td><td class="isian"></td>`
           + `<td class="cek">&#9744;</td></tr>`;
       });
@@ -2071,7 +2075,9 @@
         + `<div><div class="garis">Diperiksa oleh</div></div>`
         + `<div><div class="garis">Tanggal selesai</div></div></div>`
         + `<p class="cetak-kaki">Koordinat pada kolom "Yang Terjadi" adalah posisi absen terakhir `
-        + `salesman &mdash; bisa diklik kalau lembar ini dibuka sebagai PDF.</p>`
+        + `salesman. <b>Scan QR di sebelahnya</b> untuk langsung membukanya di Google Maps &mdash; `
+        + `jalan juga dari lembar yang dicetak di kertas. Koordinatnya sendiri bisa diklik kalau `
+        + `lembar ini dibuka sebagai PDF di komputer.</p>`
         + `</section>`;
     }
     if (!nama.length)
@@ -2299,6 +2305,33 @@
     `https://www.google.com/maps/search/?api=1&query=${la.toFixed(6)},${lo.toFixed(6)}`;
   const petaToko = (la, lo) =>
     `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${la.toFixed(6)},${lo.toFixed(6)}`;
+
+  // Versi pendek khusus QR. Isi QR yang lebih pendek berarti kotaknya lebih
+  // sedikit, dan tiap kotak jadi lebih besar di kertas — itu yang menentukan
+  // masih kebaca atau tidak oleh kamera HP. Tujuannya sama persis dengan
+  // petaPin, cuma bentuk alamatnya yang lebih ringkas.
+  const petaPendek = (la, lo) =>
+    `https://maps.google.com/?q=${la.toFixed(5)},${lo.toFixed(5)}`;
+
+  // QR berisi tautan posisi absen, untuk lembar yang benar-benar dicetak.
+  // Di kertas tautan jelas tidak bisa diklik, dan PDF yang dibuat dari HP
+  // biasanya membuang tautannya — QR tetap jalan di keduanya.
+  // Tingkat koreksi "M" (15%) adalah takaran lazim untuk cetak; ukuran versinya
+  // dibiarkan menyesuaikan isi (argumen 0). Ruang putih di sekelilingnya diatur
+  // lewat CSS, bukan margin di dalam SVG, supaya kotaknya sendiri tetap sebesar
+  // mungkin di ruang yang ada.
+  function qrSvg(url, judul) {
+    if (typeof qrcode !== "function") return "";
+    try {
+      const q = qrcode(0, "M");
+      q.addData(url);
+      q.make();
+      return `<span class="qr"${judul ? ` title="${escapeHtml(judul)}"` : ""}>`
+        + q.createSvgTag({ cellSize: 1, margin: 0, scalable: true }) + `</span>`;
+    } catch (e) {
+      return "";
+    }
+  }
 
   // Koordinatnya sendiri jadi tautan ke peta, ditambah satu tautan Street View
   // di sebelahnya. Tidak perlu tulisan "buka peta" lagi — koordinat bergaris
