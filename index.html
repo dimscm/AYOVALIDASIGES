@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>M3 Beverage Mayora</title>
-  <link rel="stylesheet" href="styles.css?v=50" />
+  <link rel="stylesheet" href="styles.css?v=51" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23c8102e'/%3E%3Ctext x='50' y='62' font-size='34' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EM3%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -128,11 +128,17 @@
               sebelas kunjungan yang IN RADIUS artinya titik tokonya sudah benar, tidak ada yang
               perlu ditanyakan, dan mencetaknya hanya menghabiskan kertas. Datanya tetap utuh di
               tabel dan di Excel; yang disaring di sini daftar kerjanya, bukan datanya. Pada outlet yang absen
-              di luar radius, tercetak juga <b>koordinat absen terakhir salesman</b> beserta
-              <b>QR code</b>-nya — tinggal discan pakai kamera HP, langsung terbuka posisinya di Google
-              Maps, jadi ketahuan waktu itu dia sebenarnya berdiri di mana. QR dipakai karena di
-              kertas tautan jelas tidak bisa diklik, dan PDF yang dibuat dari HP biasanya membuang
-              tautannya. Koordinatnya sendiri tetap bisa diklik kalau lembar itu dibuka sebagai PDF
+              di luar radius tercetak <b>QR code</b> — tinggal discan pakai kamera HP, langsung
+              terbuka titiknya di Google Maps. QR dipakai karena di kertas tautan jelas tidak bisa
+              diklik, dan PDF yang dibuat dari HP biasanya membuang tautannya.
+              <b>Isi QR-nya mengikuti apa yang paling perlu ditanyakan:</b> kalau outlet itu punya
+              usulan titik toko, QR-nya berisi <b>titik usulan</b> — salesman tinggal melihat
+              petanya dan menjawab benar atau salah, dan kolom jawabannya sudah disediakan
+              (☐ Benar ☐ Salah). Kalau salesmannya bilang benar, koordinat yang tertulis di atas
+              QR itulah yang disalin ke master. Kalau outlet itu belum punya usulan, QR-nya berisi
+              <b>posisi absen terakhir</b> salesman, jadi pertanyaannya berubah menjadi "waktu itu
+              kamu sebenarnya di mana". Keterangan kecil di bawah tiap QR menyebutkan isinya yang
+              mana — jangan dilewat, karena dua-duanya kelihatan sama di kertas. Koordinatnya sendiri tetap bisa diklik kalau lembar itu dibuka sebagai PDF
               di komputer. Jumlah kunjungan ikut ditulis (<b>"3 dari 8 kunjungan"</b>) supaya
               kelihatan seberapa sering masalahnya terjadi, bukan cuma berapa kali.</p>
             <p class="hnote"><b>Kolom "Barcode"</b> menjawab pertanyaan: barcode outlet ini
@@ -497,7 +503,7 @@
       </section>
     </div>
 
-    <p class="credit">dimscm &middot; v50</p>
+    <p class="credit">dimscm &middot; v51</p>
   </main>
 
   <!-- Lembar cetak per salesman. Disusun saat tombol Cetak ditekan, dan hanya
@@ -508,7 +514,7 @@
   <script src="vendor/jszip.min.js"></script>
   <script src="vendor/7zz.umd.js"></script>
   <script src="vendor/qrcode.js"></script>
-  <script src="app.js?v=50"></script>
-  <script src="dash2.js?v=50"></script>
+  <script src="app.js?v=51"></script>
+  <script src="dash2.js?v=51"></script>
 </body>
 </html>

@@ -722,6 +722,16 @@ tr.row-dup .dupcell { visibility: hidden; }
     padding: 1mm; background: #fff; box-sizing: border-box;
   }
   #cetak .qr svg { display: block; width: 100%; height: 100%; }
+  /* QR-nya bisa berisi dua hal yang berbeda jauh artinya — titik toko yang
+     diusulkan, atau tempat salesman absen. Di kertas tidak ada tooltip, jadi
+     isinya harus tertulis. QR tanpa keterangan lebih berbahaya daripada tidak
+     ada QR: salahnya tidak kelihatan. */
+  #cetak .qr-cap {
+    float: right; clear: right; width: 15mm; margin: -0.5mm 0 1mm 2mm;
+    font-size: 6.5pt; line-height: 1.2; text-align: center; color: #555;
+  }
+  /* Kotak jawaban yang tinggal dicoret pagi itu juga. */
+  #cetak .pilihan { display: block; font-size: 8pt; color: #444; white-space: nowrap; }
 
   /* ---- Kaki ---- */
   .cetak-ttd { margin-top: 16px; font-size: 8.5pt; display: flex; gap: 26px; }

@@ -1973,7 +1973,12 @@
     const r = rows[0];
     const u = state.titikByOutlet && state.titikByOutlet.get(r.custno);
     const bc = state.barcodeByOutlet && state.barcodeByOutlet.get(r.custno);
-    const masalah = [], tanya = [];
+    const masalah = [], tanya = [], jawab = [];
+
+    // Titik yang diusulkan web ini, kalau ada. USUL berarti dihitung dari
+    // sebaran kunjungan; KEMBALI berarti koordinat lama yang dulu sudah
+    // terbukti menghasilkan flag 1. Keduanya menyimpan angkanya di mLat/mLon.
+    const usul = u && (u.bucket === "USUL" || u.bucket === "KEMBALI") ? u : null;
 
     const luar = radiusLayakTanya(rows);
     if (luar) {
@@ -2003,16 +2008,42 @@
               + (tgl.length && dalam ? " &middot; " : "")
               + (dalam ? `${dalam} kunjungan lain in radius` : "") + `</span>`
             : "")
+        // Satu QR saja per outlet, dan yang dipasang adalah yang paling
+        // berguna untuk ditanyakan pagi itu. Kalau web ini punya usulan titik
+        // toko, itu yang dipasang: salesmannya tinggal scan dan menjawab
+        // "benar" atau "salah", dan jawabannya itulah yang menentukan angka
+        // mana yang masuk master. Kalau tidak ada usulan, yang dipasang posisi
+        // absen terakhir — pertanyaannya jadi "waktu itu kamu di mana".
+        // Dua QR berdampingan sengaja tidak dipakai: menghabiskan kertas, dan
+        // di kertas tidak ada cara membedakan mana yang barusan discan.
+        + (usul
+            ? qrSvg(petaPendek(usul.mLat, usul.mLon), "Scan: titik toko yang diusulkan")
+              + `<span class="qr-cap">titik usulan</span>`
+            : pos
+              ? qrSvg(petaPendek(pos.la, pos.lo), "Scan: posisi absen terakhir di peta")
+                + `<span class="qr-cap">posisi absen</span>`
+              : "")
         + (pos
-            ? qrSvg(petaPendek(pos.la, pos.lo), "Scan: posisi absen terakhir di peta")
-              + `<span class="kecil">absen terakhir ${escapeHtml(pos.tgl)}: `
+            ? `<span class="kecil">absen terakhir ${escapeHtml(pos.tgl)}: `
               + `<a href="${petaPin(pos.la, pos.lo)}">${pos.la.toFixed(5)}, ${pos.lo.toFixed(5)}</a>`
               + `</span>`
+            : "")
+        // Angka usulannya ditulis juga, bukan cuma QR-nya: kalau salesmannya
+        // bilang benar, angka inilah yang disalin ke master.
+        + (usul
+            ? `<span class="kecil berat">${usul.bucket === "KEMBALI" ? "kembalikan ke" : "usulan titik toko"}: `
+              + `<a href="${petaPin(usul.mLat, usul.mLon)}">`
+              + `${usul.mLat.toFixed(5)}, ${usul.mLon.toFixed(5)}</a></span>`
             : ""));
       if (u && u.bucket === "TANYA")
         tanya.push("Absen tercatat berpencar &mdash; posisi toko sebenarnya di mana?");
-      else if (u && (u.bucket === "USUL" || u.bucket === "KEMBALI"))
-        tanya.push("Titik toko di sistem salah &mdash; pastikan letak tokonya");
+      else if (usul) {
+        tanya.push(usul.bucket === "KEMBALI"
+          ? `<b class="berat">Scan QR</b> &mdash; titik ini dulu benar (terakhir lolos `
+            + `${escapeHtml(String(usul.tglLolos || "-"))}). Masih pas letaknya?`
+          : `<b class="berat">Scan QR</b> &mdash; titik ini benar letak tokonya?`);
+        jawab.push(`<span class="pilihan">&#9744; Benar &nbsp; &#9744; Salah</span>`);
+      }
       else if (u && u.bucket === "PAS")
         tanya.push("Titik toko sudah benar &mdash; kenapa absen jauh dari toko?");
       else tanya.push("Kenapa absen jauh dari toko?");
@@ -2027,7 +2058,7 @@
         ? `Barcode ${escapeHtml(bc.alasan)} &mdash; sudah dilaporkan?`
         : "Barcode tidak pernah berhasil discan &mdash; kondisinya bagaimana?");
     }
-    return { masalah, tanya };
+    return { masalah, tanya, jawab };
   }
 
   function susunCetak() {
@@ -2042,7 +2073,7 @@
       arr.push(r);
     }
     for (const [custno, rows] of outletRows) {
-      const { masalah, tanya } = masalahOutlet(rows);
+      const { masalah, tanya, jawab } = masalahOutlet(rows);
       if (!masalah.length) continue;
       const sls = rows[0].salesmanEff || "(tanpa nama salesman)";
       let g = perSls.get(sls);
@@ -2054,7 +2085,7 @@
       if (adaRadius) g.radius = (g.radius || 0) + 1;
       if (adaBarcode) g.barcode = (g.barcode || 0) + 1;
       g.baris.push({ custno, nama: rows[0].namaTokoEff, alamat: rows[0].alamatEff,
-                     masalah, tanya });
+                     masalah, tanya, jawab });
     }
 
     const hariIni = new Date().toLocaleDateString("id-ID",
@@ -2085,7 +2116,8 @@
           + `<td><b>${escapeHtml(b.nama || "")}</b>`
           + (b.alamat ? `<span class="kecil">${escapeHtml(b.alamat)}</span>` : "") + `</td>`
           + `<td class="kejadian">${b.masalah.join("<br>")}</td>`
-          + `<td>${b.tanya.join("<br>")}</td><td class="isian"></td>`
+          + `<td>${b.tanya.join("<br>")}</td>`
+          + `<td class="isian">${b.jawab.join("")}</td>`
           + `<td class="cek">&#9744;</td></tr>`;
       });
       html += `</tbody></table>`
@@ -2093,10 +2125,13 @@
         + `<div><div class="garis">Salesman &mdash; ${escapeHtml(sls)}</div></div>`
         + `<div><div class="garis">Diperiksa oleh</div></div>`
         + `<div><div class="garis">Tanggal selesai</div></div></div>`
-        + `<p class="cetak-kaki">Koordinat pada kolom "Yang Terjadi" adalah posisi absen terakhir `
-        + `salesman. <b>Scan QR di sebelahnya</b> untuk langsung membukanya di Google Maps &mdash; `
-        + `jalan juga dari lembar yang dicetak di kertas. Koordinatnya sendiri bisa diklik kalau `
-        + `lembar ini dibuka sebagai PDF di komputer. Outlet yang absennya di luar radius `
+        + `<p class="cetak-kaki"><b>Scan QR</b> untuk membuka titiknya di Google Maps &mdash; jalan `
+        + `juga dari lembar yang dicetak di kertas. Baca dulu keterangan di bawah QR-nya: `
+        + `<b>"titik usulan"</b> berarti itu letak toko yang disarankan sistem, dan yang perlu `
+        + `dijawab salesman benar atau salah; <b>"posisi absen"</b> berarti itu tempat salesman `
+        + `absen waktu itu. Kalau salesmannya bilang titik usulan sudah benar, angka yang tertulis `
+        + `di atas QR itulah yang disalin ke master. Koordinatnya juga bisa diklik kalau lembar ini `
+        + `dibuka sebagai PDF di komputer. Outlet yang absennya di luar radius `
         + `<b>kurang dari sepertiga kunjungan</b> tidak ikut tercetak &mdash; sesekali meleset `
         + `bukan pola, dan datanya tetap ada di tabel maupun di Excel.</p>`
         + `</section>`;
