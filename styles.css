@@ -711,10 +711,15 @@ tr.row-dup .dupcell { visibility: hidden; }
      menumpang pada teks yang sudah ada — kalau ditaruh sebagai baris sendiri,
      tiap outlet bertambah belasan milimeter dan jumlah halamannya berlipat.
      Ruang putih di sekelilingnya (quiet zone) wajib ada, kalau tidak kameranya
-     sering gagal mengunci. */
+     sering gagal mengunci.
+     15mm adalah batas bawah yang masih lolos uji baca ulang: di bawah itu
+     QR-nya gagal dibaca, diukur dengan mengambil gambarnya pada 96 dpi lalu
+     didekode. Jadi kertas tidak dihemat dengan mengecilkan QR lebih jauh —
+     dihemat dengan tidak mencetak outlet yang sebenarnya tidak bermasalah
+     (lihat AMBANG_LUAR di app.js). */
   #cetak .qr {
-    float: right; width: 16mm; height: 16mm; margin: 0 0 1mm 2mm;
-    padding: 1.5mm; background: #fff; box-sizing: border-box;
+    float: right; width: 15mm; height: 15mm; margin: 0 0 1mm 2mm;
+    padding: 1mm; background: #fff; box-sizing: border-box;
   }
   #cetak .qr svg { display: block; width: 100%; height: 100%; }
 

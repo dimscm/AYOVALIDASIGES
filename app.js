@@ -1950,14 +1950,33 @@
   // salesmannya. Karena itu isinya dipilih dari sudut pandang orang yang
   // ditanya — apa yang terjadi di outletnya, dan apa yang perlu dipastikan —
   // bukan istilah teknis dashboard.
+  // Sesekali meleset bukan pola. Outlet yang sepuluh dari sebelas kunjungannya
+  // IN RADIUS tidak ada yang perlu ditanyakan — titik tokonya jelas benar, dan
+  // mencetaknya cuma menghabiskan kertas serta melebarkan daftar yang harusnya
+  // bisa dikerjakan pagi itu juga. Yang ikut tercetak hanya outlet yang minimal
+  // sepertiga kunjungannya di luar radius. Angka sepertiga ini sama dengan yang
+  // dipakai menilai kerapatan kunjungan pada usulan titik, supaya satu web
+  // tidak memakai dua ukuran "cukup sering" yang berbeda.
+  // Catatan: ini aturan lembar cetak saja. Tabel dan Excel tetap memuat semua
+  // kunjungan apa adanya — yang disaring di sini daftar kerjanya, bukan datanya.
+  const AMBANG_LUAR = 1 / 3;
+
+  // Dipakai dua tempat: menyusun isi baris, dan menghitung chip "N outlet
+  // radius" di kop. Kalau dihitung terpisah, angkanya bisa berbeda dengan isinya.
+  function radiusLayakTanya(rows) {
+    const luar = rows.filter((x) => x.flagRadius !== "1");
+    if (!luar.length) return null;
+    return luar.length / rows.length >= AMBANG_LUAR ? luar : null;
+  }
+
   function masalahOutlet(rows) {
     const r = rows[0];
     const u = state.titikByOutlet && state.titikByOutlet.get(r.custno);
     const bc = state.barcodeByOutlet && state.barcodeByOutlet.get(r.custno);
     const masalah = [], tanya = [];
 
-    const luar = rows.filter((x) => x.flagRadius !== "1");
-    if (luar.length) {
+    const luar = radiusLayakTanya(rows);
+    if (luar) {
       // Tanggalnya dipotong 3 terakhir supaya barisnya tidak memanjang. Kalau
       // dipotong, itu dikatakan — daftar 3 tanggal di sebelah angka "8 dari 10"
       // tanpa keterangan terbaca seperti datanya yang tidak cocok.
@@ -2029,7 +2048,7 @@
       let g = perSls.get(sls);
       if (!g) { g = { rayon: new Set(), baris: [] }; perSls.set(sls, g); }
       if (rows[0].rayonEff) g.rayon.add(rows[0].rayonEff);
-      const adaRadius = rows.some((x) => x.flagRadius !== "1");
+      const adaRadius = !!radiusLayakTanya(rows);
       const bc = state.barcodeByOutlet && state.barcodeByOutlet.get(custno);
       const adaBarcode = !!(bc && (bc.bucket === "BARU" || bc.bucket === "BELUM"));
       if (adaRadius) g.radius = (g.radius || 0) + 1;
@@ -2077,7 +2096,9 @@
         + `<p class="cetak-kaki">Koordinat pada kolom "Yang Terjadi" adalah posisi absen terakhir `
         + `salesman. <b>Scan QR di sebelahnya</b> untuk langsung membukanya di Google Maps &mdash; `
         + `jalan juga dari lembar yang dicetak di kertas. Koordinatnya sendiri bisa diklik kalau `
-        + `lembar ini dibuka sebagai PDF di komputer.</p>`
+        + `lembar ini dibuka sebagai PDF di komputer. Outlet yang absennya di luar radius `
+        + `<b>kurang dari sepertiga kunjungan</b> tidak ikut tercetak &mdash; sesekali meleset `
+        + `bukan pola, dan datanya tetap ada di tabel maupun di Excel.</p>`
         + `</section>`;
     }
     if (!nama.length)
@@ -2316,14 +2337,19 @@
   // QR berisi tautan posisi absen, untuk lembar yang benar-benar dicetak.
   // Di kertas tautan jelas tidak bisa diklik, dan PDF yang dibuat dari HP
   // biasanya membuang tautannya — QR tetap jalan di keduanya.
-  // Tingkat koreksi "M" (15%) adalah takaran lazim untuk cetak; ukuran versinya
-  // dibiarkan menyesuaikan isi (argumen 0). Ruang putih di sekelilingnya diatur
-  // lewat CSS, bukan margin di dalam SVG, supaya kotaknya sendiri tetap sebesar
-  // mungkin di ruang yang ada.
+  // Tingkat koreksi dipasang "L" (7%), bukan "M" (15%). Dengan isi sepanjang ini
+  // "M" menuntut 33 x 33 kotak sedangkan "L" cukup 29 x 29 — pada kotak QR yang
+  // sama besarnya di kertas, tiap kotaknya jadi 12% lebih besar. Untuk lembar
+  // yang dicetak bersih dari printer kantor, ukuran kotak itulah penentu masih
+  // terbaca atau tidak oleh kamera HP, jauh lebih menentukan daripada cadangan
+  // koreksi yang sebenarnya untuk QR yang sobek atau kotor.
+  // Ukuran versinya dibiarkan menyesuaikan isi (argumen 0). Ruang putih di
+  // sekelilingnya diatur lewat CSS, bukan margin di dalam SVG, supaya kotaknya
+  // sendiri tetap sebesar mungkin di ruang yang ada.
   function qrSvg(url, judul) {
     if (typeof qrcode !== "function") return "";
     try {
-      const q = qrcode(0, "M");
+      const q = qrcode(0, "L");
       q.addData(url);
       q.make();
       return `<span class="qr"${judul ? ` title="${escapeHtml(judul)}"` : ""}>`

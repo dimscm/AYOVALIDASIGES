@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>M3 Beverage Mayora</title>
-  <link rel="stylesheet" href="styles.css?v=49" />
+  <link rel="stylesheet" href="styles.css?v=50" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23c8102e'/%3E%3Ctext x='50' y='62' font-size='34' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EM3%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -123,7 +123,11 @@
               untuk menulis jawabannya, plus tempat tanda tangan. Saring dulu rayon atau salesman
               yang mau dicetak, baru tekan tombolnya. Di jendela cetak yang muncul, pilih
               <b>"Simpan sebagai PDF"</b> kalau ingin filenya, atau langsung cetak ke printer.
-              Outlet yang barcodenya sudah beres sendiri tidak ikut tercetak. Pada outlet yang absen
+              Outlet yang barcodenya sudah beres sendiri tidak ikut tercetak, begitu juga outlet
+              yang absennya di luar radius <b>kurang dari sepertiga kunjungan</b> — sepuluh dari
+              sebelas kunjungan yang IN RADIUS artinya titik tokonya sudah benar, tidak ada yang
+              perlu ditanyakan, dan mencetaknya hanya menghabiskan kertas. Datanya tetap utuh di
+              tabel dan di Excel; yang disaring di sini daftar kerjanya, bukan datanya. Pada outlet yang absen
               di luar radius, tercetak juga <b>koordinat absen terakhir salesman</b> beserta
               <b>QR code</b>-nya — tinggal discan pakai kamera HP, langsung terbuka posisinya di Google
               Maps, jadi ketahuan waktu itu dia sebenarnya berdiri di mana. QR dipakai karena di
@@ -493,7 +497,7 @@
       </section>
     </div>
 
-    <p class="credit">dimscm &middot; v49</p>
+    <p class="credit">dimscm &middot; v50</p>
   </main>
 
   <!-- Lembar cetak per salesman. Disusun saat tombol Cetak ditekan, dan hanya
@@ -504,7 +508,7 @@
   <script src="vendor/jszip.min.js"></script>
   <script src="vendor/7zz.umd.js"></script>
   <script src="vendor/qrcode.js"></script>
-  <script src="app.js?v=49"></script>
-  <script src="dash2.js?v=49"></script>
+  <script src="app.js?v=50"></script>
+  <script src="dash2.js?v=50"></script>
 </body>
 </html>
