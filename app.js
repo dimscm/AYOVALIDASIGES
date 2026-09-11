@@ -1958,7 +1958,11 @@
 
     const luar = rows.filter((x) => x.flagRadius !== "1");
     if (luar.length) {
+      // Tanggalnya dipotong 3 terakhir supaya barisnya tidak memanjang. Kalau
+      // dipotong, itu dikatakan — daftar 3 tanggal di sebelah angka "8 dari 10"
+      // tanpa keterangan terbaca seperti datanya yang tidak cocok.
       const tgl = luar.slice(-3).map((x) => String(x.visitDate || "").slice(0, 5)).filter(Boolean);
+      const awalan = luar.length > tgl.length && tgl.length ? "3 terakhir: " : "";
       // Posisi absen TERAKHIR: itu yang paling bisa dijawab salesmannya hari ini
       // ("waktu itu kamu di mana?"). Diambil dari kunjungan bermasalah paling
       // akhir yang koordinatnya terekam.
@@ -1967,8 +1971,18 @@
         const la = angka(luar[i].latVisit), lo = angka(luar[i].longVisit);
         if (!titikKosong(la, lo)) pos = { la, lo, tgl: String(luar[i].visitDate || "").slice(0, 5) };
       }
-      masalah.push(`<b class="berat">Di luar radius</b> ${luar.length}&times;`
-        + (tgl.length ? `<span class="kecil">${escapeHtml(tgl.join(", "))}</span>` : "")
+      // "8 dari 10 kunjungan", bukan "8x". Angka sendirian tidak bisa ditanyakan:
+      // 8 kali di luar radius dari 8 kunjungan itu cerita yang berbeda jauh
+      // dengan 8 dari 30. Kalau sebagian kunjungan pernah IN RADIUS, itu
+      // disebut juga — artinya titik tokonya terbukti masih bisa kena, jadi
+      // pertanyaannya ke salesman pun berbeda.
+      const dalam = rows.length - luar.length;
+      masalah.push(`<b class="berat">Di luar radius</b> ${luar.length} dari ${rows.length} kunjungan`
+        + (tgl.length || dalam
+            ? `<span class="kecil">${awalan}${escapeHtml(tgl.join(", "))}`
+              + (tgl.length && dalam ? " &middot; " : "")
+              + (dalam ? `${dalam} kunjungan lain in radius` : "") + `</span>`
+            : "")
         + (pos ? `<span class="kecil">absen terakhir ${escapeHtml(pos.tgl)}: `
             + `<a href="${petaPin(pos.la, pos.lo)}">${pos.la.toFixed(5)}, ${pos.lo.toFixed(5)}</a>`
             + `</span>` : ""));
