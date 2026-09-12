@@ -387,6 +387,20 @@ tr.row-nil td { background: #fffbfb; }
   font-size: 10px; letter-spacing: .12em; color: #c3c7ce; user-select: none;
 }
 
+/* Pemberitahuan singkat di bawah layar. Dipakai waktu browser menolak membuka
+   tab baru — kalau tidak diberitahu, pemakainya cuma melihat kliknya tidak
+   berfungsi dan menyangka webnya rusak. */
+.toast {
+  position: fixed; left: 50%; bottom: 20px; transform: translate(-50%, 16px);
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 11px 15px; border-radius: 8px; z-index: 100;
+  background: var(--ink); color: #fff; font-size: 13px; line-height: 1.5;
+  box-shadow: 0 8px 28px rgba(0,0,0,.22);
+  opacity: 0; pointer-events: none; transition: opacity .15s, transform .15s;
+}
+.toast.tampil { opacity: 1; transform: translate(-50%, 0); }
+.toast.warn { background: var(--warn); }
+
 /* Kotak error yang terlihat jelas — penting di HP, di mana console tidak terjangkau. */
 .errbox {
   margin-top: 12px; padding: 12px 14px; border-radius: var(--r);
@@ -697,6 +711,9 @@ tr.row-dup .dupcell { visibility: hidden; }
   #cetak td.cek { font-size: 13pt; color: #666; }
   #cetak .kecil { display: block; font-size: 7.5pt; color: #555; margin-top: 1px; }
   #cetak .berat { font-weight: 700; }
+  /* Keterangan yang sifatnya temuan, bukan sekadar data: outlet yang absennya
+     dilakukan orang lain, atau yang tidak punya pemilik di DMP. */
+  #cetak .tanda { font-weight: 600; color: #222; }
   /* "8 dari 10 kunjungan" dijaga tetap satu kesatuan — kalau patah di tengah,
      angkanya terbaca sebagai dua hal yang berbeda. */
   #cetak .rasio { white-space: nowrap; }

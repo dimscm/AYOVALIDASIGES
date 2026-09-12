@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>M3 Beverage Mayora</title>
-  <link rel="stylesheet" href="styles.css?v=51" />
+  <link rel="stylesheet" href="styles.css?v=52" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23c8102e'/%3E%3Ctext x='50' y='62' font-size='34' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EM3%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -127,7 +127,18 @@
               yang absennya di luar radius <b>kurang dari sepertiga kunjungan</b> — sepuluh dari
               sebelas kunjungan yang IN RADIUS artinya titik tokonya sudah benar, tidak ada yang
               perlu ditanyakan, dan mencetaknya hanya menghabiskan kertas. Datanya tetap utuh di
-              tabel dan di Excel; yang disaring di sini daftar kerjanya, bukan datanya. Pada outlet yang absen
+              tabel dan di Excel; yang disaring di sini daftar kerjanya, bukan datanya.
+              <b>Daftar outletnya diambil dari DMP</b> — outlet masuk ke halaman salesman yang
+              memegangnya di master, bukan ke salesman yang kebetulan absen di situ. Kalau yang
+              absen ternyata orang lain, itu ditulis di bawah nama tokonya ("dikunjungi ...") dan
+              sekalian jadi salah satu pertanyaan — biasanya tandanya outlet sudah pindah tangan
+              tapi DMP belum diperbarui. Outlet yang di DMP terdaftar di lebih dari satu salesman
+              dicetak di pemilik utamanya saja, dengan catatan "juga terdaftar di ...", supaya
+              tidak tercetak dua kali. Catatan: di tabel Detail, kolom <b>Salesman</b> tetap berisi
+              yang <i>berkunjung</i> — di sana pertanyaannya memang "siapa yang absen di sini".
+              Di sheet <b>Usulan Titik</b> dan <b>Barcode Perlu Dicek</b> kolomnya sekarang dipisah
+              jelas: <b>Salesman (DMP)</b> pemiliknya, <b>Dikunjungi Oleh</b> yang absen.
+              Pada outlet yang absen
               di luar radius tercetak <b>QR code</b> — tinggal discan pakai kamera HP, langsung
               terbuka titiknya di Google Maps. QR dipakai karena di kertas tautan jelas tidak bisa
               diklik, dan PDF yang dibuat dari HP biasanya membuang tautannya.
@@ -503,7 +514,7 @@
       </section>
     </div>
 
-    <p class="credit">dimscm &middot; v51</p>
+    <p class="credit">dimscm &middot; v52</p>
   </main>
 
   <!-- Lembar cetak per salesman. Disusun saat tombol Cetak ditekan, dan hanya
@@ -514,7 +525,7 @@
   <script src="vendor/jszip.min.js"></script>
   <script src="vendor/7zz.umd.js"></script>
   <script src="vendor/qrcode.js"></script>
-  <script src="app.js?v=51"></script>
-  <script src="dash2.js?v=51"></script>
+  <script src="app.js?v=52"></script>
+  <script src="dash2.js?v=52"></script>
 </body>
 </html>

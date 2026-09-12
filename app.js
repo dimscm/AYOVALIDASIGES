@@ -1928,8 +1928,9 @@
         Keadaan: BARCODE_INFO[u.bucket].label,
         "Kode Outlet": r.custno,
         "Nama Toko": r.namaTokoEff,
-        Salesman: r.salesmanEff,
-        Rayon: r.rayonEff,
+        "Salesman (DMP)": r.salesmanDmp || "",
+        "Dikunjungi Oleh": r.salesmanEff,
+        "Rayon (DMP)": r.rayonEff,
         "Alamat (DMP)": r.alamatEff || "",
         "Kunjungan Discan": `${u.scan} dari ${u.n}`,
         "Jumlah Kunjungan": u.n,
@@ -2075,17 +2076,39 @@
     for (const [custno, rows] of outletRows) {
       const { masalah, tanya, jawab } = masalahOutlet(rows);
       if (!masalah.length) continue;
-      const sls = rows[0].salesmanEff || "(tanpa nama salesman)";
+      // Lembar ini dikelompokkan menurut PEMILIK OUTLET DI DMP, bukan menurut
+      // siapa yang kebetulan berkunjung. Yang dipanggil pagi hari itu salesman
+      // yang memegang rayonnya; outlet yang bukan miliknya tidak bisa dia
+      // jawab, dan di data uji 270 dari 1.668 outlet tercetak di orang yang
+      // salah karena dulu dikelompokkan menurut pengunjung.
+      // (Di tabel Detail, kolom Salesman tetap menampilkan yang BERKUNJUNG —
+      // di sana pertanyaannya memang "siapa yang absen di sini".)
+      const d = state.dmpIndex.get(custno);
+      const pemilik = (d && d.salesman) || "";
+      const sls = pemilik || rows[0].salesmanEff || "(tanpa nama salesman)";
+      // Pengunjung yang bukan pemiliknya — itu sendiri temuan yang pantas
+      // ditanyakan, jadi ditulis di barisnya.
+      const pengunjung = [...new Set(rows.map((x) => x.salesmanEff).filter(Boolean))]
+        .filter((n) => n !== pemilik);
+      // Satu outlet bisa terdaftar di lebih dari satu salesman di DMP. Yang
+      // mencetak hanya pemilik utamanya, tapi penugasan lainnya disebut supaya
+      // tidak terlihat seperti outlet ini cuma milik satu orang.
+      const lain = d && d.alt ? d.alt.map((a) => `${a.s}${a.r ? ` (${a.r})` : ""}`) : [];
       let g = perSls.get(sls);
       if (!g) { g = { rayon: new Set(), baris: [] }; perSls.set(sls, g); }
-      if (rows[0].rayonEff) g.rayon.add(rows[0].rayonEff);
+      const rayon = (d && d.rayon) || rows[0].rayonEff || "";
+      if (rayon) g.rayon.add(rayon);
       const adaRadius = !!radiusLayakTanya(rows);
       const bc = state.barcodeByOutlet && state.barcodeByOutlet.get(custno);
       const adaBarcode = !!(bc && (bc.bucket === "BARU" || bc.bucket === "BELUM"));
       if (adaRadius) g.radius = (g.radius || 0) + 1;
       if (adaBarcode) g.barcode = (g.barcode || 0) + 1;
+      if (pengunjung.length) {
+        tanya.push(`Outlet ini dikunjungi <b class="berat">${escapeHtml(pengunjung.join(", "))}</b>`
+          + ` &mdash; masih milik Anda?`);
+      }
       g.baris.push({ custno, nama: rows[0].namaTokoEff, alamat: rows[0].alamatEff,
-                     masalah, tanya, jawab });
+                     masalah, tanya, jawab, pengunjung, lain, tanpaPemilik: !pemilik });
     }
 
     const hariIni = new Date().toLocaleDateString("id-ID",
@@ -2114,7 +2137,13 @@
       g.baris.forEach((b, i) => {
         html += `<tr><td class="no">${i + 1}</td><td class="kode">${escapeHtml(b.custno)}</td>`
           + `<td><b>${escapeHtml(b.nama || "")}</b>`
-          + (b.alamat ? `<span class="kecil">${escapeHtml(b.alamat)}</span>` : "") + `</td>`
+          + (b.alamat ? `<span class="kecil">${escapeHtml(b.alamat)}</span>` : "")
+          + (b.tanpaPemilik ? `<span class="kecil tanda">tidak ada pemiliknya di DMP</span>` : "")
+          + (b.pengunjung && b.pengunjung.length
+              ? `<span class="kecil tanda">dikunjungi ${escapeHtml(b.pengunjung.join(", "))}</span>` : "")
+          + (b.lain && b.lain.length
+              ? `<span class="kecil">juga terdaftar di ${escapeHtml(b.lain.join(", "))}</span>` : "")
+          + `</td>`
           + `<td class="kejadian">${b.masalah.join("<br>")}</td>`
           + `<td>${b.tanya.join("<br>")}</td>`
           + `<td class="isian">${b.jawab.join("")}</td>`
@@ -2133,7 +2162,10 @@
         + `di atas QR itulah yang disalin ke master. Koordinatnya juga bisa diklik kalau lembar ini `
         + `dibuka sebagai PDF di komputer. Outlet yang absennya di luar radius `
         + `<b>kurang dari sepertiga kunjungan</b> tidak ikut tercetak &mdash; sesekali meleset `
-        + `bukan pola, dan datanya tetap ada di tabel maupun di Excel.</p>`
+        + `bukan pola, dan datanya tetap ada di tabel maupun di Excel. `
+        + `Daftar outlet di lembar ini diambil dari <b>pemilik outlet menurut DMP</b>, bukan dari `
+        + `siapa yang kebetulan berkunjung &mdash; kalau ada outlet yang absennya dilakukan orang `
+        + `lain, itu ditulis di bawah nama tokonya.</p>`
         + `</section>`;
     }
     if (!nama.length)
@@ -2403,6 +2435,81 @@
       + ` &middot; <a class="maplink" href="${petaToko(la, lo)}" target="_blank" rel="noopener"`
       + ` title="Street View — lihat muka tokonya, kalau jalannya pernah difoto">lihat toko</a>`;
   }
+
+  // Membuka peta tidak diserahkan begitu saja ke browser.
+  // Versi claude.ai berjalan di dalam iframe ber-sandbox. Kalau izin
+  // "allow-popups" tidak diberikan di situ, tautan target="_blank" MATI TANPA
+  // PESAN APA PUN — tidak ada tab baru, tidak ada error, tidak ada apa-apa.
+  // Dari sisi pemakai persis seperti koordinatnya tidak bisa diklik.
+  // Jadi kliknya ditangani sendiri: dicoba dibuka, dan kalau browser menolak,
+  // alamatnya disalin ke papan klip supaya masih bisa ditempel sendiri —
+  // lengkap dengan pemberitahuan, supaya kegagalannya tidak diam-diam.
+  function pesanTautan(teks, nada) {
+    let el = $("tautanPesan");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "tautanPesan";
+      el.className = "toast";
+      document.body.appendChild(el);
+    }
+    el.className = "toast" + (nada ? " " + nada : "");
+    el.textContent = teks;
+    el.classList.add("tampil");
+    clearTimeout(pesanTautan._t);
+    pesanTautan._t = setTimeout(() => el.classList.remove("tampil"), 6000);
+  }
+
+  function salinTeks(teks) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(teks).then(() => true, () => salinKuno(teks));
+    }
+    return Promise.resolve(salinKuno(teks));
+  }
+
+  // Cara lama, untuk browser atau konteks yang menolak navigator.clipboard.
+  function salinKuno(teks) {
+    try {
+      const t = document.createElement("textarea");
+      t.value = teks;
+      t.setAttribute("readonly", "");
+      t.style.cssText = "position:fixed;top:-1000px;opacity:0";
+      document.body.appendChild(t);
+      t.select();
+      const ok = document.execCommand("copy");
+      t.remove();
+      return ok;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function bukaPeta(url) {
+    let w = null;
+    try {
+      // "noopener" JANGAN ditaruh di argumen ketiga: menurut spesifikasi,
+      // window.open dengan noopener selalu mengembalikan null — jadi tab-nya
+      // terbuka tapi kodenya menyangka gagal, lalu memunculkan pemberitahuan
+      // yang keliru. Hubungan ke halaman asal diputus setelahnya saja.
+      w = window.open(url, "_blank");
+      if (w) { try { w.opener = null; } catch (e2) { /* lintas-asal, biarkan */ } }
+    } catch (e) {
+      w = null;
+    }
+    if (w) return;
+    // Ditolak. Jangan diam — beri tahu, dan berikan alamatnya.
+    salinTeks(url).then((ok) => {
+      pesanTautan(ok
+        ? "Browser menolak membuka tab baru. Alamat petanya sudah disalin — tinggal tempel (Ctrl+V) di tab browser."
+        : `Browser menolak membuka tab baru. Salin alamat ini: ${url}`, "warn");
+    });
+  }
+
+  document.addEventListener("click", (e) => {
+    const a = e.target && e.target.closest && e.target.closest("a.maplink");
+    if (!a || !a.href) return;
+    e.preventDefault();
+    bukaPeta(a.href);
+  });
 
   // Rentang tanggal yang sedang dipakai menilai titik. Kunjungan lama sering
   // bermasalah karena titik masternya memang belum diperbaiki waktu itu —
@@ -2847,9 +2954,13 @@
       Tindakan: kembali ? "Kembalikan ke titik lama yang dulu lolos" : "Ganti ke titik usulan",
       "Kode Outlet": custno,
       "Nama Toko": r.namaTokoEff,
-      Salesman: r.salesmanEff,
-      "Salesman DMP": r.salesmanDmp || "",
-      Rayon: r.rayonEff,
+      // Pemilik menurut DMP ditaruh di depan: daftar kerja dibagikan menurut
+      // siapa yang memegang outletnya, bukan siapa yang kebetulan berkunjung.
+      // Pengunjungnya tetap ditulis di kolom sebelahnya — kalau keduanya
+      // berbeda, itu sendiri yang perlu ditindaklanjuti.
+      "Salesman (DMP)": r.salesmanDmp || "",
+      "Dikunjungi Oleh": r.salesmanEff,
+      "Rayon (DMP)": r.rayonEff,
       "Alamat (DMP)": r.alamatEff || "",
       Keyakinan: u.yakin,
       Catatan: catatanUsulan(u),
