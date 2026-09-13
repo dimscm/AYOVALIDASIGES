@@ -1170,7 +1170,12 @@
       hitungBarcode();
       hitungTitik();
 
-      const salesmen = [...new Set(results.map((r) => r.salesmanEff).filter(Boolean))].sort();
+      // Daftar isian filter memuat pengunjung DAN pemilik outlet menurut DMP.
+      // Tanpa pemiliknya, salesman yang outletnya selalu diabsen orang lain
+      // tidak akan pernah muncul di daftar — padahal justru dia yang perlu
+      // ditanya, dan lembar cetak memang dikelompokkan atas namanya.
+      const salesmen = [...new Set(results.flatMap((r) => [r.salesmanEff, r.salesmanDmp])
+        .filter(Boolean))].sort();
       populateSalesmen(salesmen);
       // Rayon asli dari DMP didahulukan; nilai cadangan dari TEAM ditaruh
       // paling bawah supaya tidak mengaburkan daftar rayon yang sebenarnya.
@@ -1397,7 +1402,15 @@
         const u = state.titikByOutlet && state.titikByOutlet.get(r.custno);
         if (!u || u.bucket !== kel) return false;
       }
-      if (sms.size > 0 && !sms.has(r.salesmanEff)) return false;
+      // Daftar kerja (lembar cetak & sheet Excel) dibagikan menurut PEMILIK
+      // outlet di DMP, jadi saringan salesmannya pun harus menguji pemiliknya.
+      // Kalau menguji pengunjung, dua-duanya meleset sekaligus: outlet milik
+      // salesman yang dipilih tapi diabsen orang lain ikut terbuang, sementara
+      // outlet milik orang lain yang kebetulan diabsen salesman terpilih malah
+      // ikut tercetak — di halaman pemiliknya, yang tidak dipilih sama sekali.
+      const namaUji = (opsi && opsi.pakaiPemilik)
+        ? (r.salesmanDmp || r.salesmanEff) : r.salesmanEff;
+      if (sms.size > 0 && !sms.has(namaUji)) return false;
       if (rys.size > 0 && !rys.has(r.rayonEff)) return false;
       if (q) {
         const hay = [r.custno, r.namaTokoEff, r.salesmanEff, r.salesmanDmp, r.rayonEff, r.alamatEff, r.alorReason,
@@ -1910,7 +1923,7 @@
   // (salesman, rayon, tanggal, kategori), kecuali cakupan HHT. Kategori tetap
   // ikut karena itu pilihan sadar pengguna.
   function barisKerja() {
-    const base = getBaseFiltered({ abaikanHht: true });
+    const base = getBaseFiltered({ abaikanHht: true, pakaiPemilik: true });
     const cats = getSelectedCategories();
     return cats.size === 0 ? base : base.filter((r) => cats.has(r.category));
   }
@@ -2176,13 +2189,24 @@
 
   if ($("cetakBtn")) {
     $("cetakBtn").addEventListener("click", () => {
-      if (!state.filtered.length) return;
+      // Jangan berpatokan pada jumlah baris tabel. Tabel menghitung KUNJUNGAN
+      // (siapa yang absen), lembar cetak menghitung OUTLET menurut pemiliknya
+      // di DMP — jadi tabel bisa kosong sementara lembar cetaknya ada isinya,
+      // misalnya waktu menyaring salesman yang outletnya selalu diabsen orang
+      // lain. Dulu tombolnya diam saja di keadaan itu, dan yang lebih buruk,
+      // lembar cetak yang lama masih tertinggal di halaman — sekali cetak,
+      // yang keluar daftar penyaring sebelumnya.
       const jml = susunCetak();
       const outlet = $("cetak").querySelectorAll("tbody tr").length;
+      // Jumlahnya bisa berbeda dengan tabel di atas, dan itu bukan kebetulan:
+      // tabel menampilkan KUNJUNGAN (siapa yang absen), lembar cetak
+      // menampilkan OUTLET menurut pemiliknya di DMP. Dikatakan supaya
+      // selisihnya tidak terbaca sebagai data yang hilang.
       pesanExport(jml
-        ? `Lembar cetak disiapkan: ${jml} salesman, ${outlet.toLocaleString("id-ID")} outlet `
-          + `— satu halaman per salesman. Di jendela cetak pilih "Simpan sebagai PDF" kalau `
-          + `ingin filenya, atau langsung cetak.`
+        ? `Lembar cetak disiapkan: <b>${jml} salesman, ${outlet.toLocaleString("id-ID")} outlet</b> `
+          + `— satu halaman per salesman. Isinya outlet <b>milik</b> salesman itu menurut DMP, `
+          + `jadi jumlahnya bisa berbeda dengan tabel di atas yang menghitung kunjungan. `
+          + `Di jendela cetak pilih "Simpan sebagai PDF" kalau ingin filenya, atau langsung cetak.`
         : "Tidak ada outlet bermasalah pada penyaring yang dipilih, jadi tidak ada yang dicetak.");
       // Tanpa saringan, satu area bisa jadi ratusan halaman. Ditanya dulu
       // daripada jendela cetak terbuka dengan tumpukan kertas yang tidak

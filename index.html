@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>M3 Beverage Mayora</title>
-  <link rel="stylesheet" href="styles.css?v=52" />
+  <link rel="stylesheet" href="styles.css?v=53" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23c8102e'/%3E%3Ctext x='50' y='62' font-size='34' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EM3%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -134,7 +134,13 @@
               sekalian jadi salah satu pertanyaan — biasanya tandanya outlet sudah pindah tangan
               tapi DMP belum diperbarui. Outlet yang di DMP terdaftar di lebih dari satu salesman
               dicetak di pemilik utamanya saja, dengan catatan "juga terdaftar di ...", supaya
-              tidak tercetak dua kali. Catatan: di tabel Detail, kolom <b>Salesman</b> tetap berisi
+              tidak tercetak dua kali. <b>Saringan salesman di atas pun mengikuti pemilik DMP</b>
+              untuk lembar cetak dan dua sheet daftar kerja: pilih tiga salesman, yang tercetak
+              persis tiga halaman berisi outlet <i>milik</i> mereka — termasuk outlet mereka yang
+              absennya dikerjakan orang lain, dan tidak termasuk outlet orang lain yang kebetulan
+              mereka absen. Karena itu jumlah outlet di lembar cetak bisa berbeda dengan jumlah
+              baris di tabel: tabel menghitung <i>kunjungan</i>, lembar cetak menghitung
+              <i>outlet</i>. Catatan: di tabel Detail, kolom <b>Salesman</b> tetap berisi
               yang <i>berkunjung</i> — di sana pertanyaannya memang "siapa yang absen di sini".
               Di sheet <b>Usulan Titik</b> dan <b>Barcode Perlu Dicek</b> kolomnya sekarang dipisah
               jelas: <b>Salesman (DMP)</b> pemiliknya, <b>Dikunjungi Oleh</b> yang absen.
@@ -514,7 +520,7 @@
       </section>
     </div>
 
-    <p class="credit">dimscm &middot; v52</p>
+    <p class="credit">dimscm &middot; v53</p>
   </main>
 
   <!-- Lembar cetak per salesman. Disusun saat tombol Cetak ditekan, dan hanya
@@ -525,7 +531,7 @@
   <script src="vendor/jszip.min.js"></script>
   <script src="vendor/7zz.umd.js"></script>
   <script src="vendor/qrcode.js"></script>
-  <script src="app.js?v=52"></script>
-  <script src="dash2.js?v=52"></script>
+  <script src="app.js?v=53"></script>
+  <script src="dash2.js?v=53"></script>
 </body>
 </html>
