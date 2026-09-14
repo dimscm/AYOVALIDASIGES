@@ -307,7 +307,17 @@
         tanggal: lastTanggal,
       });
     }
-    return { rows };
+    // Kode cabang dari baris judul laporan ("... (DETAIL) 103686 - PT.CIPTA
+    // NIAGA SEMESTA ..."). Dipakai untuk memberi tahu kalau file HHT dan EDI
+    // ternyata dari cabang yang berbeda — tanpa angka ini, pesannya cuma bisa
+    // menduga, dan yang membaca tidak punya cara memeriksanya.
+    let cabang = "";
+    for (let r = 0; r < Math.min(headerAt, 10); r++) {
+      const teks = (aoa[r] || []).map((c) => String(c == null ? "" : c)).join(" ");
+      const m = teks.match(/\b(\d{5,6})\s*-\s*\S/);
+      if (m) { cabang = m[1]; break; }
+    }
+    return { rows, cabang };
   }
 
   // Tanggal EDI ("24/08/2026", serial Excel, Date) dan HHT ("29 JUL") ditulis
@@ -1060,6 +1070,7 @@
         const hhtAoa = await readWorkbook(state.hhtFile);
         const parsed = parseHht(hhtAoa);
         state.hhtRows = parsed.rows;
+        state.hhtCabang = parsed.cabang || "";
         state.hhtOutletSet = new Set(parsed.rows.map((h) => String(h.custno || "").trim()));
         hhtWarn = parsed.warn || "";
         // Dijodohkan per outlet DAN per tanggal. Kalau hanya per outlet, kunjungan
@@ -1265,6 +1276,33 @@
                   ? `Kolom Alasan tetap diisi dari catatan HHT outlet yang sama di tanggal lain `
                     + `(${dipinjam.toLocaleString("id-ID")} baris, ditandai tanggal asalnya) sebagai petunjuk.`
                   : ""),
+          };
+        } else if (state.hhtOutletSet && state.hhtOutletSet.size && !matched
+                   && diLuar === results.length) {
+          // Tidak satu pun outlet di HHT ada di EDI. Ini hampir selalu berarti
+          // dua file dari CABANG yang berbeda — dan kalau dibiarkan diam,
+          // ringkasan memajang "Flag 1 + Tidak scan" puluhan ribu seolah-olah
+          // temuan lapangan yang mengerikan, padahal status scan-nya memang
+          // tidak diketahui. Dulu keadaan ini lolos tanpa peringatan sama
+          // sekali: peringatan tanggal tidak kena (tanggalnya kebetulan sama),
+          // dan peringatan cakupan sebagian juga tidak, karena yang tidak
+          // tercakup bukan sebagian tapi semuanya.
+          const cabEdi = [...new Set(results.map((r) => String(r.kodeCabang || "").trim())
+            .filter(Boolean))];
+          const sebut = state.hhtCabang || cabEdi.length
+            ? ` (HHT cabang ${state.hhtCabang || "?"}, EDI cabang ${cabEdi.join(", ") || "?"})`
+            : "";
+          state.periodeWarn = {
+            judul: "File HHT dan EDI berasal dari cabang/area yang berbeda.",
+            ringkas: `Tidak ada satu pun outlet yang sama${sebut}: HHT memuat `
+              + `${state.hhtOutletSet.size.toLocaleString("id-ID")} outlet, EDI `
+              + `${new Set(results.map((r) => r.custno)).size.toLocaleString("id-ID")} outlet, `
+              + `nol beririsan. Upload HHT dari cabang yang sama dengan EDI-nya.`,
+            detail: `Format filenya sendiri sudah benar dan terbaca — yang tidak cocok isinya. `
+              + `Selama belum sepasang, seluruh kolom Scan kosong dan angka "Tidak scan" di `
+              + `Ringkasan bukan temuan lapangan: status scan outlet-outlet ini memang tidak `
+              + `diketahui, bukan berarti tidak discan. Kolom Titik Toko, Flag Radius, dan usulan `
+              + `koordinat tetap sah karena tidak membutuhkan HHT.`,
           };
         } else if (bisaDisaring) {
           // Irisannya ada, tapi tidak semua. Ini yang bikin angka "Tidak scan"
