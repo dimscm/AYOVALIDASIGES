@@ -870,6 +870,9 @@
         salesman: sls,
         rayon: ryRow,
         cycle: cell(row, iCycle),
+        // Status hidup/mati disimpan per outlet, bukan cuma dihitung: daftar
+        // "semua outlet" tidak boleh memuat 100rb outlet mati.
+        aktif: isAktif,
         alt: null,          // penugasan tambahan: [{ s: salesman, r: rayon }]
       });
       if (sls) {
@@ -1768,7 +1771,7 @@
   const BATAS_XLSX = 30000;
 
   const KEPALA_HASIL = ["Kategori", "Konsistensi", "Masalah Outlet", "Jumlah Kunjungan Outlet", "Kode Outlet",
-    "Nama Toko", "Salesman", "Salesman DMP", "Rayon (Team)", "Cycle", "Alamat Toko", "Visit Date",
+    "Nama Toko", "Salesman", "Salesman DMP", "Rayon (DMP)", "Cycle", "Alamat Toko", "Visit Date",
     "Jam Masuk", "Jam Keluar", "Flag Radius", "Distance", "Lat Visit", "Long Visit",
     "Lat Val", "Long Val", "HHT", "Tipe Scan", "Alasan HHT", "Alasan Dari Tanggal",
     "Alor Reason", "Saran", "Barcode", "Kunjungan Discan", "Alasan Terakhir",
@@ -1894,6 +1897,88 @@
       || urutan[x.Keyakinan] - urutan[y.Keyakinan]
       || (y["Kunjungan Jadi IN RADIUS"] || 0) - (x["Kunjungan Jadi IN RADIUS"] || 0));
     return usulan;
+  }
+
+  // ================= Semua outlet DMP pada saringan yang dipilih =================
+  // Sheet "Hasil" berisi satu baris per KUNJUNGAN, jadi outlet yang tidak
+  // pernah dikunjungi sama sekali tidak muncul di situ — padahal justru itu
+  // yang sering perlu dikejar. Sheet ini berangkat dari sisi sebaliknya: mulai
+  // dari daftar outlet di DMP, lalu ditempeli apa yang terjadi pada outlet itu.
+  // Outlet tanpa kunjungan tetap dapat barisnya, ditandai.
+  //
+  // Hanya outlet AKTIF yang diambil. Di file contoh, 102.574 dari 148.802
+  // outlet berstatus mati (tanpa salesman, tanpa rayon) — kalau ikut, sheetnya
+  // jadi tumpukan baris kosong yang menutupi yang benar-benar perlu dilihat.
+  function daftarSemuaOutlet() {
+    if (!state.dmpIndex || !state.dmpIndex.size) return [];
+    const sms = getSelectedSalesmen();
+    const rys = getSelectedRayon();
+    // Tanpa saringan sama sekali, ini berarti seluruh outlet aktif di DMP
+    // (46 ribu di file contoh) — bukan yang dimaksud siapa pun yang menekan
+    // Export, dan cukup besar untuk menggagalkan pembuatan filenya.
+    if (!sms.size && !rys.size) return [];
+
+    // Kunjungan yang dipakai: seluruh yang lolos saringan tanggal/periode/
+    // pencarian, tanpa memandang jenis masalahnya — sheet ini memang harus
+    // memuat yang bermasalah maupun yang tidak.
+    const perOutlet = new Map();
+    for (const r of getBaseFiltered({ abaikanHht: true, pakaiPemilik: true,
+                                      abaikanTitik: true, abaikanBarcode: true })) {
+      let v = perOutlet.get(r.custno);
+      if (!v) { v = []; perOutlet.set(r.custno, v); }
+      v.push(r);
+    }
+
+    const baris = [];
+    for (const [kode, d] of state.dmpIndex) {
+      if (!d.aktif) continue;
+      // Penugasan ganda ikut diperiksa: outlet yang dipegang dua salesman harus
+      // muncul kalau salah satunya yang dipilih.
+      const pasangan = [{ s: d.salesman, r: d.rayon }, ...(d.alt || [])];
+      const cocok = pasangan.some((x) =>
+        (!sms.size || sms.has(x.s)) && (!rys.size || rys.has(x.r)));
+      if (!cocok) continue;
+
+      const vs = perOutlet.get(kode) || [];
+      const luar = vs.filter((x) => x.flagRadius !== "1").length;
+      const akhir = vs.length
+        ? vs.reduce((a, x) => (String(x.tglIso || "") > String(a.tglIso || "") ? x : a), vs[0])
+        : null;
+      const u = state.titikByOutlet && state.titikByOutlet.get(kode);
+      const bc = state.barcodeByOutlet && state.barcodeByOutlet.get(kode);
+      const masalah = vs.length ? sisiMasalah(vs[0]) : "";
+      const pengunjung = [...new Set(vs.map((x) => x.salesmanEff).filter(Boolean))];
+      baris.push({
+        "Kode Outlet": kode,
+        "Nama Toko": d.namaOutlet || "",
+        "Salesman (DMP)": d.salesman || "",
+        "Rayon (DMP)": d.rayon || "",
+        Cycle: d.cycle || "",
+        "Alamat (DMP)": d.alamat || "",
+        "Penugasan Lain": (d.alt || []).map((a) => `${a.s}${a.r ? ` (${a.r})` : ""}`).join("; "),
+        Status: vs.length ? "Ada kunjungan" : "Belum pernah dikunjungi",
+        "Jumlah Kunjungan": vs.length,
+        "Kunjungan In Radius": vs.length - luar,
+        "Kunjungan Di Luar Radius": luar,
+        "Kunjungan Terakhir": akhir ? (akhir.visitDate || "") : "",
+        "Dikunjungi Oleh": pengunjung.join("; "),
+        "Masalah Outlet": masalah ? MASALAH_INFO[masalah].label : "",
+        "Titik Toko": !u ? ""
+          : u.bucket === "PAS" && u.sebab === "diperbaiki" ? "Sudah diperbaiki setelah tanggal ini"
+          : TITIK_TEKS[u.bucket] || "",
+        Barcode: bc ? BARCODE_INFO[bc.bucket].label : "",
+        "Perlu Ditindaklanjuti": (masalah
+          || (u && (u.bucket === "USUL" || u.bucket === "KEMBALI"))
+          || (bc && (bc.bucket === "BARU" || bc.bucket === "BELUM"))) ? "Ya" : "Tidak",
+      });
+    }
+    // Yang belum pernah dikunjungi ditaruh paling atas: itu yang paling mudah
+    // terlewat justru karena tidak meninggalkan jejak apa pun di data kunjungan.
+    const urut = { "Belum pernah dikunjungi": 0, "Ada kunjungan": 1 };
+    baris.sort((a, b) => urut[a.Status] - urut[b.Status]
+      || String(a["Salesman (DMP)"]).localeCompare(String(b["Salesman (DMP)"]))
+      || String(a["Kode Outlet"]).localeCompare(String(b["Kode Outlet"])));
+    return baris;
   }
 
   // Sel hyperlink di xlsx: teksnya yang terbaca, alamatnya di properti "l".
@@ -2260,6 +2345,9 @@
         const barcode = daftarBarcode();
         if (barcode.length)
           XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(barcode), "Barcode Perlu Dicek");
+        const semua = daftarSemuaOutlet();
+        if (semua.length)
+          XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(semua), "Semua Outlet (DMP)");
         // Lewat unduh(), bukan XLSX.writeFile: writeFile membuat tautan
         // unduhannya sendiri, dan tautan itu mati di dalam artifact.
         const buf = XLSX.write(wb, { type: "array", bookType: "xlsx" });
@@ -2268,9 +2356,18 @@
         const isi = [`Hasil ${state.filtered.length.toLocaleString("id-ID")} baris`];
         if (usulan.length) isi.push(`Usulan Titik ${usulan.length.toLocaleString("id-ID")} outlet`);
         if (barcode.length) isi.push(`Barcode Perlu Dicek ${barcode.length.toLocaleString("id-ID")} outlet`);
+        if (semua.length) isi.push(`Semua Outlet (DMP) ${semua.length.toLocaleString("id-ID")} outlet`);
+        const belum = semua.filter((x) => x.Status === "Belum pernah dikunjungi").length;
         pesanExport(`File berisi: ${isi.join(" &middot; ")}. Daftar kerja (Usulan Titik, Barcode) `
           + `memakai seluruh outlet pada saringan yang dipilih — tidak dipotong oleh centang `
-          + `"Hanya yang ada di HHT", karena koordinat dan radius tidak membutuhkan HHT.`);
+          + `"Hanya yang ada di HHT", karena koordinat dan radius tidak membutuhkan HHT.`
+          + (semua.length
+              ? ` Sheet <b>"Semua Outlet (DMP)"</b> berisi seluruh outlet aktif milik salesman/rayon `
+                + `yang dipilih — bermasalah maupun tidak, termasuk `
+                + `<b>${belum.toLocaleString("id-ID")} outlet yang belum pernah dikunjungi</b> `
+                + `dan karena itu tidak muncul di sheet Hasil.`
+              : ` Sheet "Semua Outlet (DMP)" hanya dibuat kalau salesman atau rayonnya disaring `
+                + `dulu — tanpa saringan, isinya seluruh outlet aktif di DMP.`));
       }
     } catch (err) {
       console.error(err);
