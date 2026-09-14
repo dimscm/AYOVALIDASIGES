@@ -1233,6 +1233,25 @@
         kotakHht.classList.toggle("hidden", !bisaDisaring);
         $("filterPeriodeHht").checked = bisaDisaring;
       }
+      // Kolom yang diam-diam kosong lebih berbahaya daripada file yang gagal
+      // dibaca: hasilnya tetap keluar, cuma separuh isinya hilang tanpa sebab
+      // yang kelihatan. Koordinat absen yang kosong menghilangkan QR, tautan
+      // peta, dan seluruh usulan titik sekaligus — dan tidak satu pun dari itu
+      // meninggalkan pesan. Jadi diperiksa di sini, sekali, dengan angka.
+      state.kolomHilang = [];
+      if (results.length) {
+        const tanpaKoord = results.filter((r) =>
+          titikKosong(angka(r.latVisit), angka(r.longVisit))).length;
+        const tanpaTgl = results.filter((r) => !r.tglIso).length;
+        if (tanpaKoord / results.length > 0.5) {
+          state.kolomHilang.push({ apa: "koordinat absen (LAT VISIT / LONG VISIT)",
+            n: tanpaKoord, akibat: "QR, tautan peta, dan usulan titik toko tidak bisa dibuat" });
+        }
+        if (tanpaTgl / results.length > 0.5) {
+          state.kolomHilang.push({ apa: "tanggal kunjungan (VISIT DATE)",
+            n: tanpaTgl, akibat: "penjodohan dengan HHT, saringan tanggal, dan urutan kunjungan tidak jalan" });
+        }
+      }
       applyFilters();
       $("resultSection").classList.remove("hidden");
       const msg = [`${results.length.toLocaleString("id-ID")} kunjungan`];
@@ -1347,14 +1366,31 @@
       const wb = $("d1Warn");
       if (wb) {
         const w = state.periodeWarn;
-        wb.classList.toggle("info", !!(w && w.info));
-        wb.innerHTML = w
+        const kh = state.kolomHilang || [];
+        // Kolom yang kosong didahulukan dan memakai nada peringatan penuh: ini
+        // bukan soal file yang kurang sepadan, tapi data yang memang tidak ada.
+        const teksKolom = kh.length
+          ? `<b>Ada kolom EDI yang kosong, jadi sebagian isi halaman ini tidak bisa dibuat.</b> `
+            + kh.map((k) => `${escapeHtml(k.apa)} kosong di `
+                + `${k.n.toLocaleString("id-ID")} dari ${results.length.toLocaleString("id-ID")} `
+                + `kunjungan &mdash; ${escapeHtml(k.akibat)}`).join(". ") + `. `
+            + `<details class="warn-more"><summary>Kenapa?</summary><p>`
+            + `Kolomnya dicari dengan beberapa nama yang lazim `
+            + `(LAT VISIT / LONG VISIT, VISIT DATE atau TANGGAL). Kalau file dari area lain `
+            + `memakai judul kolom yang berbeda, isinya terbaca kosong walaupun filenya sendiri `
+            + `terbuka dengan baik. Kirimkan contoh filenya supaya nama kolomnya bisa ditambahkan. `
+            + `Kolom Flag Radius dan riwayat scan tidak terpengaruh.</p></details>`
+          : "";
+        const teksPeriode = w
           ? `<b>${escapeHtml(w.judul || "Periode EDI dan HHT tidak bertemu.")}</b> `
             + `${escapeHtml(w.ringkas)}`
             + (w.detail ? `<details class="warn-more"><summary>Kenapa?</summary>`
                           + `<p>${escapeHtml(w.detail)}</p></details>` : "")
           : "";
-        wb.classList.toggle("hidden", !w);
+        wb.classList.toggle("info", !kh.length && !!(w && w.info));
+        wb.innerHTML = [teksKolom, teksPeriode].filter(Boolean)
+          .join(`<hr class="warn-sela">`);
+        wb.classList.toggle("hidden", !teksKolom && !teksPeriode);
       }
 
       if (hhtWarn) msg.push(hhtWarn);
@@ -2201,7 +2237,11 @@
             ? `<span class="kecil">absen terakhir ${escapeHtml(pos.tgl)}: `
               + `<a href="${petaPin(pos.la, pos.lo)}">${pos.la.toFixed(5)}, ${pos.lo.toFixed(5)}</a>`
               + `</span>`
-            : "")
+            // Tanpa koordinat absen tidak ada yang bisa dipetakan, jadi QR pun
+            // tidak dibuat. Kalau dibiarkan kosong begitu saja, yang membaca
+            // mengira QR-nya rusak — padahal datanya yang tidak ada.
+            : `<span class="kecil">koordinat absen tidak ada di file EDI &mdash; `
+              + `tidak ada QR/peta untuk outlet ini</span>`)
         // Angka usulannya ditulis juga, bukan cuma QR-nya: kalau salesmannya
         // bilang benar, angka inilah yang disalin ke master.
         + (usul

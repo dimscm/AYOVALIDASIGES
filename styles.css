@@ -623,6 +623,9 @@ tr.row-dup .dupcell { visibility: hidden; }
 
 /* Bagian panjang dari peringatan disembunyikan di balik "Kenapa?" supaya
    ringkasan tidak terdorong jauh ke bawah, terutama di HP. */
+/* Pemisah antara dua peringatan yang kebetulan muncul bersamaan. */
+.warn-sela { border: 0; border-top: 1px solid rgba(0,0,0,.12); margin: 9px 0; }
+
 .warn-more { margin-top: 6px; }
 .warn-more > summary {
   cursor: pointer; font-weight: 600; list-style: none;
