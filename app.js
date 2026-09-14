@@ -1405,15 +1405,18 @@
         const u = state.titikByOutlet && state.titikByOutlet.get(r.custno);
         if (!u || u.bucket !== kel) return false;
       }
-      // Daftar kerja (lembar cetak & sheet Excel) dibagikan menurut PEMILIK
-      // outlet di DMP, jadi saringan salesmannya pun harus menguji pemiliknya.
-      // Kalau menguji pengunjung, dua-duanya meleset sekaligus: outlet milik
-      // salesman yang dipilih tapi diabsen orang lain ikut terbuang, sementara
-      // outlet milik orang lain yang kebetulan diabsen salesman terpilih malah
-      // ikut tercetak — di halaman pemiliknya, yang tidak dipilih sama sekali.
-      const namaUji = (opsi && opsi.pakaiPemilik)
-        ? (r.salesmanDmp || r.salesmanEff) : r.salesmanEff;
-      if (sms.size > 0 && !sms.has(namaUji)) return false;
+      // Saringan salesman memilih OUTLET, bukan kunjungan: yang diuji pemilik
+      // outlet menurut DMP (jatuh ke pengunjung kalau outletnya tidak punya
+      // pemilik). Dengan begitu tabel, Excel, dan lembar cetak berbicara tentang
+      // kumpulan toko yang sama persis. Waktu yang diuji masih pengunjung,
+      // ketiganya berbeda-beda isinya: outlet milik salesman terpilih yang
+      // diabsen orang lain hilang dari daftarnya, sementara outlet milik orang
+      // lain yang kebetulan diabsen salesman terpilih malah ikut.
+      // Kunjungan oleh salesman lain ke outlet ini tetap ditampilkan — kolom
+      // Salesman memang berisi yang berkunjung, dan bedanya itu justru temuan.
+      // Untuk mencari "apa saja yang dikerjakan si A hari ini", pakai kotak
+      // pencarian: namanya ikut dicari di kolom pengunjung.
+      if (sms.size > 0 && !sms.has(r.salesmanDmp || r.salesmanEff)) return false;
       if (rys.size > 0 && !rys.has(r.rayonEff)) return false;
       if (q) {
         const hay = [r.custno, r.namaTokoEff, r.salesmanEff, r.salesmanDmp, r.rayonEff, r.alamatEff, r.alorReason,
@@ -1922,8 +1925,7 @@
     // pencarian, tanpa memandang jenis masalahnya — sheet ini memang harus
     // memuat yang bermasalah maupun yang tidak.
     const perOutlet = new Map();
-    for (const r of getBaseFiltered({ abaikanHht: true, pakaiPemilik: true,
-                                      abaikanTitik: true, abaikanBarcode: true })) {
+    for (const r of kunjunganTerpilih()) {
       let v = perOutlet.get(r.custno);
       if (!v) { v = []; perOutlet.set(r.custno, v); }
       v.push(r);
@@ -2007,8 +2009,19 @@
   // Baris untuk daftar kerja: penyaring yang dipilih pengguna tetap dihormati
   // (salesman, rayon, tanggal, kategori), kecuali cakupan HHT. Kategori tetap
   // ikut karena itu pilihan sadar pengguna.
+  // Seluruh kunjungan ke outlet yang sedang dipilih — apa pun keadaannya.
+  // Saringan salesman, rayon, tanggal, periode, dan pencarian tetap berlaku;
+  // yang sengaja diabaikan cuma penyaring "jenis masalah" (centang HHT, dropdown
+  // titik, dropdown barcode) dan kategori. Penyaring itu untuk membaca layar,
+  // bukan untuk menentukan isi file — sekali dipakai memotong isi Excel, outlet
+  // yang keadaannya baik lenyap dan isinya jadi tidak sejalan dengan lembar
+  // cetak maupun sheet Semua Outlet.
+  function kunjunganTerpilih() {
+    return getBaseFiltered({ abaikanHht: true, abaikanTitik: true, abaikanBarcode: true });
+  }
+
   function barisKerja() {
-    const base = getBaseFiltered({ abaikanHht: true, pakaiPemilik: true });
+    const base = getBaseFiltered({ abaikanHht: true });
     const cats = getSelectedCategories();
     return cats.size === 0 ? base : base.filter((r) => cats.has(r.category));
   }
@@ -2311,7 +2324,6 @@
   }
 
   $("exportBtn").addEventListener("click", async () => {
-    if (!state.filtered.length) return;
     const btn = $("exportBtn");
     const semula = btn.textContent;
     btn.disabled = true;
@@ -2324,15 +2336,31 @@
     await new Promise((r) => setTimeout(r, 40));
     const tgl = new Date().toISOString().slice(0, 10);
     try {
+      // Sheet Hasil memuat SELURUH kunjungan ke outlet yang sedang dipilih,
+      // bukan cuma yang lolos penyaring jenis masalah di layar. Outlet yang
+      // keadaannya baik harus ikut: tanpa itu, isi Excel tidak bisa
+      // dipertemukan dengan lembar cetak maupun sheet Semua Outlet, dan
+      // pemakainya tidak punya cara tahu bagian mana yang terpotong.
+      // Kategori tetap ada sebagai kolom, jadi penyaringannya dilakukan di
+      // Excel — di situ memang tempatnya.
+      const rowsHasil = kunjunganTerpilih().slice().sort((a, b) => {
+        const c = String(a.custno).localeCompare(String(b.custno));
+        if (c) return c;
+        return String(a.visitDate || "").localeCompare(String(b.visitDate || ""));
+      });
+      if (!rowsHasil.length) {
+        pesanExport("Tidak ada kunjungan pada saringan yang dipilih, jadi tidak ada yang diexport.");
+        return;
+      }
       const aoa = [KEPALA_HASIL];
-      for (const r of state.filtered) aoa.push(barisHasil(r));
+      for (const r of rowsHasil) aoa.push(barisHasil(r));
 
-      if (state.filtered.length > BATAS_XLSX) {
+      if (rowsHasil.length > BATAS_XLSX) {
         // ﻿ (BOM) supaya huruf beraksen dan tanda "—" tidak berantakan di Excel.
         await unduh(`hasil-validasi-${tgl}.csv`, ["﻿", keCsv(aoa)], "text/csv;charset=utf-8");
         const us = state.titikByOutlet ? [...state.titikByOutlet.values()]
           .filter((u) => u.bucket === "USUL").length : 0;
-        pesanExport(`${state.filtered.length.toLocaleString("id-ID")} baris terlalu banyak untuk `
+        pesanExport(`${rowsHasil.length.toLocaleString("id-ID")} baris terlalu banyak untuk `
           + `satu file Excel, jadi disimpan sebagai CSV — tinggal dibuka dengan Excel seperti biasa.`
           + (us ? ` Untuk daftar usulan titik, pilih dulu "Titik toko perlu diperbaiki" `
                   + `di filter sebelah, lalu Export lagi.` : ""));
@@ -2353,14 +2381,17 @@
         const buf = XLSX.write(wb, { type: "array", bookType: "xlsx" });
         await unduh(`hasil-validasi-${tgl}.xlsx`, [buf],
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        const isi = [`Hasil ${state.filtered.length.toLocaleString("id-ID")} baris`];
+        const isi = [`Hasil ${rowsHasil.length.toLocaleString("id-ID")} baris`];
         if (usulan.length) isi.push(`Usulan Titik ${usulan.length.toLocaleString("id-ID")} outlet`);
         if (barcode.length) isi.push(`Barcode Perlu Dicek ${barcode.length.toLocaleString("id-ID")} outlet`);
         if (semua.length) isi.push(`Semua Outlet (DMP) ${semua.length.toLocaleString("id-ID")} outlet`);
         const belum = semua.filter((x) => x.Status === "Belum pernah dikunjungi").length;
-        pesanExport(`File berisi: ${isi.join(" &middot; ")}. Daftar kerja (Usulan Titik, Barcode) `
-          + `memakai seluruh outlet pada saringan yang dipilih — tidak dipotong oleh centang `
-          + `"Hanya yang ada di HHT", karena koordinat dan radius tidak membutuhkan HHT.`
+        pesanExport(`File berisi: ${isi.join(" &middot; ")}. Semua sheet memakai kumpulan toko `
+          + `yang sama — outlet milik salesman/rayon yang dipilih menurut DMP. Sheet <b>Hasil</b> `
+          + `memuat <b>seluruh kunjungan</b> ke outlet itu, yang bermasalah maupun yang benar, `
+          + `jadi angkanya bisa lebih banyak daripada baris tabel di layar: dropdown jenis masalah `
+          + `dan centang "Hanya yang ada di HHT" sengaja tidak ikut memotong isi file. Saring di `
+          + `Excel lewat kolom Kategori atau Masalah Outlet.`
           + (semua.length
               ? ` Sheet <b>"Semua Outlet (DMP)"</b> berisi seluruh outlet aktif milik salesman/rayon `
                 + `yang dipilih — bermasalah maupun tidak, termasuk `
@@ -2373,8 +2404,8 @@
       console.error(err);
       // Tanpa ini, kegagalan export tidak meninggalkan jejak apa pun di layar —
       // dari sisi pengguna tombolnya "tidak bisa" tanpa sebab.
-      showError(new Error(`File gagal dibuat (${state.filtered.length.toLocaleString("id-ID")} `
-        + `baris): ${(err && err.message) || err}. Saring dulu datanya — per salesman, per `
+      showError(new Error(`File gagal dibuat: ${(err && err.message) || err}. `
+        + `Saring dulu datanya — per salesman, per `
         + `rayon, atau per periode — lalu export lagi.`));
     } finally {
       btn.disabled = false;
