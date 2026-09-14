@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>M3 Beverage Mayora</title>
-  <link rel="stylesheet" href="styles.css?v=55" />
+  <link rel="stylesheet" href="styles.css?v=56" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23c8102e'/%3E%3Ctext x='50' y='62' font-size='34' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EM3%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -229,6 +229,22 @@
               <b>"Semua outlet"</b> di atas untuk melihat satu kelompok saja, dan tombol
               <b>Export Excel</b> ikut memberi sheet <b>Usulan Titik</b> berisi satu baris per outlet.
               Makin banyak periode yang di-upload, makin banyak outlet yang bisa dinilai.</p>
+            <p class="hnote"><b>Angka dasarnya dihitung dari seluruh kunjungan ke outlet itu</b> —
+              siapa pun yang mengerjakan, kapan pun. Outlet berpindah tangan, dan kunjungan yang
+              dulu dicover salesman sebelumnya sama sahnya sebagai bukti dengan kunjungan salesman
+              sekarang; membuangnya berarti membuang separuh riwayat outlet yang baru saja dioper.
+              Karena itu di bawah kolom <b>Titik Toko</b> dan <b>Barcode</b> ada baris kecil
+              <b>"riwayat outlet: N kunjungan ..."</b> yang sengaja tidak mengikuti satu pun
+              penyaring di layar, termasuk rentang tanggal. Baris itu muncul kalau memang menambah
+              keterangan — misalnya outletnya pernah dikunjungi lebih dari satu salesman.
+              Di Excel angkanya ada sebagai kolom sendiri di keempat sheet:
+              <b>Total Kunjungan Outlet</b>, <b>Total Di Luar Radius</b>, dan
+              <b>Salesman Pernah Berkunjung</b>. Jangan tertukar dengan kolom
+              <b>Dasar Usulan</b> (<i>"3 dari 9"</i>): yang itu hanya menghitung kunjungan
+              <i>bermasalah</i> yang dipakai menghitung titiknya, bukan seluruh kunjungan outlet.
+              Di lembar cetak, riwayat utuh ini ikut tertulis kalau berbeda dengan rasio di
+              atasnya — berguna untuk tahu apakah masalahnya sudah lama atau baru muncul sejak
+              outletnya dioper.</p>
             <p class="hnote"><b>Kalau outlet ini pernah punya kunjungan flag 1</b>, titiknya sudah
               terbukti bisa memvalidasi — jadi tidak ditebak ulang. Yang dicek justru apakah titik itu
               <b>pernah diubah</b>: kalau koordinat yang dulu menghasilkan flag 1 sudah diganti dan
@@ -539,7 +555,7 @@
       </section>
     </div>
 
-    <p class="credit">dimscm &middot; v55</p>
+    <p class="credit">dimscm &middot; v56</p>
   </main>
 
   <!-- Lembar cetak per salesman. Disusun saat tombol Cetak ditekan, dan hanya
@@ -550,7 +566,7 @@
   <script src="vendor/jszip.min.js"></script>
   <script src="vendor/7zz.umd.js"></script>
   <script src="vendor/qrcode.js"></script>
-  <script src="app.js?v=55"></script>
-  <script src="dash2.js?v=55"></script>
+  <script src="app.js?v=56"></script>
+  <script src="dash2.js?v=56"></script>
 </body>
 </html>

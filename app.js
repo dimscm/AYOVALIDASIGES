@@ -1170,6 +1170,7 @@
         for (const v of visits) { v.consistency = key; v.visitCount = visits.length; }
       }
       state.results = results;
+      hitungGlobal();
       hitungBarcode();
       hitungTitik();
 
@@ -1778,7 +1779,8 @@
     "Jam Masuk", "Jam Keluar", "Flag Radius", "Distance", "Lat Visit", "Long Visit",
     "Lat Val", "Long Val", "HHT", "Tipe Scan", "Alasan HHT", "Alasan Dari Tanggal",
     "Alor Reason", "Saran", "Barcode", "Kunjungan Discan", "Alasan Terakhir",
-    "Titik Toko", "Lat Usulan", "Long Usulan", "Keyakinan Usulan", "Catatan Usulan"];
+    "Titik Toko", "Lat Usulan", "Long Usulan", "Keyakinan Usulan", "Catatan Usulan",
+    "Total Kunjungan Outlet", "Total Di Luar Radius", "Salesman Pernah Berkunjung"];
 
   const TITIK_TEKS = {
     USUL: "Perlu diperbaiki",
@@ -1809,6 +1811,7 @@
     const titik = !u ? ""
       : u.bucket === "PAS" && u.sebab === "diperbaiki" ? "Sudah diperbaiki setelah tanggal ini"
       : TITIK_TEKS[u.bucket] || "";
+    const g = globalOutlet(r.custno);
     const adaUsulan = u && (u.bucket === "USUL" || u.bucket === "KEMBALI");
     const masalah = sisiMasalah(r);
     return [
@@ -1825,6 +1828,7 @@
       titik,
       adaUsulan ? koordTeks(u.mLat) : "", adaUsulan ? koordTeks(u.mLon) : "",
       adaUsulan ? u.yakin : "", u ? catatanUsulan(u) : "",
+      g.n, g.luar, [...g.sls].join("; "),
     ];
   }
 
@@ -1950,6 +1954,7 @@
       const bc = state.barcodeByOutlet && state.barcodeByOutlet.get(kode);
       const masalah = vs.length ? sisiMasalah(vs[0]) : "";
       const pengunjung = [...new Set(vs.map((x) => x.salesmanEff).filter(Boolean))];
+      const g = globalOutlet(kode);
       baris.push({
         "Kode Outlet": kode,
         "Nama Toko": d.namaOutlet || "",
@@ -1964,6 +1969,13 @@
         "Kunjungan Di Luar Radius": luar,
         "Kunjungan Terakhir": akhir ? (akhir.visitDate || "") : "",
         "Dikunjungi Oleh": pengunjung.join("; "),
+        // Empat kolom di atas mengikuti saringan tanggal/periode yang dipilih.
+        // Yang di bawah ini riwayat utuh outletnya, tanpa penyaring apa pun —
+        // termasuk kunjungan oleh salesman yang dulu memegangnya.
+        "Total Kunjungan (semua periode)": g.n,
+        "Total In Radius (semua periode)": g.dalam,
+        "Total Di Luar Radius (semua periode)": g.luar,
+        "Salesman Pernah Berkunjung": [...g.sls].join("; "),
         "Masalah Outlet": masalah ? MASALAH_INFO[masalah].label : "",
         "Titik Toko": !u ? ""
           : u.bucket === "PAS" && u.sebab === "diperbaiki" ? "Sudah diperbaiki setelah tanggal ini"
@@ -2035,6 +2047,7 @@
       const u = state.barcodeByOutlet.get(r.custno);
       if (!u || (u.bucket !== "BARU" && u.bucket !== "BELUM") || sudah.has(r.custno)) continue;
       sudah.add(r.custno);
+      const g = globalOutlet(r.custno);
       keluar.push({
         Keadaan: BARCODE_INFO[u.bucket].label,
         "Kode Outlet": r.custno,
@@ -2047,6 +2060,11 @@
         "Jumlah Kunjungan": u.n,
         "Kunjungan Terakhir": u.tglAkhir,
         "Alasan Terakhir": u.alasan,
+        // Riwayat kunjungan utuh dari EDI, tanpa penyaring apa pun — berguna
+        // untuk menilai apakah barcode yang gagal itu sudah lama begitu atau
+        // baru sejak outletnya berpindah salesman.
+        "Total Kunjungan Outlet": g.n,
+        "Salesman Pernah Berkunjung": [...g.sls].join("; "),
       });
     }
     // Yang belum pernah discan didahulukan, lalu yang paling sering dikunjungi
@@ -2113,6 +2131,12 @@
       // disebut juga — artinya titik tokonya terbukti masih bisa kena, jadi
       // pertanyaannya ke salesman pun berbeda.
       const dalam = rows.length - luar.length;
+      // Rasio di atas menghitung kunjungan pada saringan yang dipilih. Riwayat
+      // utuh outletnya disebut terpisah kalau memang berbeda — outlet yang baru
+      // dioper sering punya riwayat panjang dari salesman sebelumnya, dan itu
+      // yang menentukan apakah masalahnya lama atau baru.
+      const g = globalOutlet(r.custno);
+      const beda = g.n && (g.n !== rows.length || g.sls.size > 1);
       masalah.push(`<b class="berat">Di luar radius</b> `
         + `<span class="rasio">${luar.length} dari ${rows.length} kunjungan</span>`
         + (tgl.length || dalam
@@ -2146,6 +2170,11 @@
             ? `<span class="kecil berat">${usul.bucket === "KEMBALI" ? "kembalikan ke" : "usulan titik toko"}: `
               + `<a href="${petaPin(usul.mLat, usul.mLon)}">`
               + `${usul.mLat.toFixed(5)}, ${usul.mLon.toFixed(5)}</a></span>`
+            : "")
+        + (beda
+            ? `<span class="kecil">riwayat outlet: ${g.n} kunjungan`
+              + (g.luar ? `, ${g.luar} di luar radius` : "")
+              + (g.sls.size > 1 ? ` &middot; ${g.sls.size} salesman` : "") + `</span>`
             : ""));
       if (u && u.bucket === "TANYA")
         tanya.push("Absen tercatat berpencar &mdash; posisi toko sebenarnya di mana?");
@@ -2765,6 +2794,44 @@
       hint: "Tidak sekali pun berhasil discan sejak periode ini. Barcodenya perlu dipasang, diganti, atau diaktifkan." },
   };
 
+  // ================= Riwayat global per outlet =================
+  // Semua angka "dasar" — dasar usulan titik dan riwayat scan barcode —
+  // dihitung dari SELURUH kunjungan ke outlet itu, tanpa memandang siapa yang
+  // mengerjakannya. Outlet berpindah tangan: kunjungan yang dicover salesman
+  // sebelumnya sama sahnya sebagai bukti dengan kunjungan salesman sekarang,
+  // dan membuangnya berarti membuang separuh riwayat outlet yang baru saja
+  // dioper. Karena itu peta ini sengaja tidak mengenal satu pun penyaring di
+  // layar, termasuk rentang tanggal.
+  function hitungGlobal() {
+    const per = new Map();
+    for (const r of state.results || []) {
+      let v = per.get(r.custno);
+      if (!v) {
+        v = { n: 0, luar: 0, dalam: 0, sls: new Set(), tglAwal: "", tglAkhir: "" };
+        per.set(r.custno, v);
+      }
+      v.n++;
+      if (r.flagRadius === "1") v.dalam++; else v.luar++;
+      if (r.salesmanEff) v.sls.add(r.salesmanEff);
+      const t = r.tglIso || "";
+      if (t) {
+        if (!v.tglAwal || t < v.tglAwal) v.tglAwal = t;
+        if (!v.tglAkhir || t > v.tglAkhir) v.tglAkhir = t;
+      }
+    }
+    // Nama salesman di HHT sengaja TIDAK dicampur ke sini. Bentuk penulisannya
+    // berbeda dengan EDI — di data uji tidak ada satu pun dari 151 nama yang
+    // sama persis — jadi mencampurnya membuat satu orang terhitung dua kali.
+    // Yang dijawab kolom ini "siapa saja yang pernah absen di outlet ini",
+    // dan itu pertanyaan tentang EDI.
+    state.globalByOutlet = per;
+  }
+
+  // Dipakai di beberapa tempat, jadi bentuknya disamakan sekali di sini.
+  const globalOutlet = (custno) =>
+    (state.globalByOutlet && state.globalByOutlet.get(custno))
+    || { n: 0, luar: 0, dalam: 0, sls: new Set(), tglAwal: "", tglAkhir: "" };
+
   function hitungBarcode() {
     const per = new Map();
     for (const h of state.hhtRows || []) {
@@ -2859,7 +2926,8 @@
         : `${u.scan} dari ${u.n} kunjungan discan, terakhir ${escapeHtml(u.tglAkhir)} gagal`
           + (u.alasan ? ` &middot; ${escapeHtml(u.alasan)}` : "");
     return `<span class="tag tag-bc-${u.bucket}" title="${escapeHtml(info.hint)}">${info.label}</span>`
-      + `<span class="titik-sub">${rinci}</span>`;
+      + `<span class="titik-sub">${rinci}</span>`
+      + riwayatSub(r.custno, u.n);
   }
 
   // Menggabungkan dua penilaian yang sudah ada — konsistensi radius (dari EDI)
@@ -3059,6 +3127,22 @@
     return "Cek peta & alamat dulu";
   }
 
+  // Satu baris kecil berisi riwayat utuh outlet. Ditulis hanya kalau memang
+  // menambah keterangan — kalau angka dasarnya sudah sama dengan riwayat
+  // utuhnya, mengulanginya cuma bikin ramai.
+  function riwayatSub(custno, dasar) {
+    const g = globalOutlet(custno);
+    if (!g.n) return "";
+    const banyakSls = g.sls.size > 1;
+    if (g.n === dasar && !banyakSls) return "";
+    const bag = [`riwayat outlet: ${g.n} kunjungan`];
+    if (g.luar) bag.push(`${g.luar} di luar radius`);
+    if (banyakSls) bag.push(`${g.sls.size} salesman`);
+    return `<span class="titik-sub" title="Seluruh kunjungan ke outlet ini, `
+      + `siapa pun yang mengerjakan dan kapan pun — termasuk oleh salesman yang `
+      + `dulu memegangnya.">${bag.join(" &middot; ")}</span>`;
+  }
+
   function titikSel(r) {
     // Kunjungan yang sudah IN RADIUS tidak perlu usulan apa-apa.
     if (r.flagRadius === "1") return "";
@@ -3095,13 +3179,15 @@
       + ` &middot; ${u.rapat} dari ${u.n} kunjungan (${Math.round((u.bagian || 0) * 100)}%)`
       + ` mengumpul di titik ini<br>`
       + petaLink(u.mLat, u.mLon, `${u.mLat.toFixed(6)}, ${u.mLon.toFixed(6)}`)
-      + `</span>`;
+      + `</span>`
+      + riwayatSub(r.custno, u.n);
   }
 
   // Baris untuk sheet "Usulan Titik": satu baris per outlet, bukan per
   // kunjungan — yang dipakai orang gudang/master untuk memperbaiki datanya.
   function titikBarisExcel(custno, u, r) {
     const kembali = u.bucket === "KEMBALI";
+    const g = globalOutlet(custno);
     return {
       Tindakan: kembali ? "Kembalikan ke titik lama yang dulu lolos" : "Ganti ke titik usulan",
       "Kode Outlet": custno,
@@ -3119,6 +3205,15 @@
       "Dasar Usulan": kembali
         ? `FLAG 1 pada ${tglTampil(u.tglLolos)}`
         : `${u.rapat} dari ${u.n} (${Math.round((u.bagian || 0) * 100)}%)`,
+      // Angka di "Dasar Usulan" hanya menghitung kunjungan BERMASALAH yang
+      // dipakai menghitung titiknya. Riwayat utuh outlet ditaruh di kolom
+      // sendiri supaya tidak tertukar: ini seluruh kunjungan ke outlet itu,
+      // siapa pun yang mengerjakan dan kapan pun, termasuk oleh salesman yang
+      // dulu memegangnya sebelum outletnya dioper.
+      "Total Kunjungan Outlet": g.n,
+      "Total In Radius": g.dalam,
+      "Total Di Luar Radius": g.luar,
+      "Salesman Pernah Berkunjung": [...g.sls].join("; "),
       "Sebaran (m)": u.sebar === undefined ? "" : u.sebar,
       "Lat Sekarang": u.belumTag ? "" : koordTeks(u.curLa),
       "Long Sekarang": u.belumTag ? "" : koordTeks(u.curLo),
