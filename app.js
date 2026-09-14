@@ -2226,10 +2226,13 @@
       const d = state.dmpIndex.get(custno);
       const pemilik = (d && d.salesman) || "";
       const sls = pemilik || rows[0].salesmanEff || "(tanpa nama salesman)";
-      // Pengunjung yang bukan pemiliknya — itu sendiri temuan yang pantas
-      // ditanyakan, jadi ditulis di barisnya.
+      // Pengunjung yang bukan pemegang halaman ini — itu sendiri temuan yang
+      // pantas ditanyakan, jadi ditulis di barisnya. Yang dikecualikan nama
+      // halamannya, bukan nama pemiliknya: tanpa DMP, pemiliknya kosong dan
+      // halaman ini dibuat atas nama pengunjung pertama — kalau yang dipakai
+      // nama pemilik, orang itu tertulis "dikunjungi" di halamannya sendiri.
       const pengunjung = [...new Set(rows.map((x) => x.salesmanEff).filter(Boolean))]
-        .filter((n) => n !== pemilik);
+        .filter((n) => n !== sls);
       // Satu outlet bisa terdaftar di lebih dari satu salesman di DMP. Yang
       // mencetak hanya pemilik utamanya, tapi penugasan lainnya disebut supaya
       // tidak terlihat seperti outlet ini cuma milik satu orang.
