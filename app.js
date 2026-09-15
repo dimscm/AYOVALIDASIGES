@@ -71,13 +71,20 @@
     jamin:       ["JAMIN", "JAM MASUK"],
     jamout:      ["JAMOUT", "JAM KELUAR"],
     docid:       ["DOCID"],
-    flagRadius:  ["FLAG RADIUS", "FLAG"],
+    // Penulisan kolom flag berbeda-beda antar area. "FLAG" ditaruh paling
+    // belakang karena paling mudah tertukar dengan kolom lain yang berawalan
+    // sama (FLAG GROUPPAYER).
+    flagRadius:  ["FLAG RADIUS", "FLAGRADIUS", "FLAG_RADIUS", "RADIUS FLAG",
+                  "STATUS RADIUS", "IN RADIUS", "FLAG IN RADIUS", "FLAG VALIDASI",
+                  "VALIDASI RADIUS", "FLAG"],
     distance:    ["DISTANCE"],
     setting:     ["SETTING", "RADIUS"],
-    latVisit:    ["LAT VISIT"],
-    longVisit:   ["LONG VISIT"],
-    latVal:      ["LAT VAL"],
-    longVal:     ["LONG VAL"],
+    latVisit:    ["LAT VISIT", "LATITUDE VISIT", "LAT KUNJUNGAN", "LAT ABSEN", "LATVISIT"],
+    longVisit:   ["LONG VISIT", "LONGITUDE VISIT", "LNG VISIT", "LONG KUNJUNGAN",
+                  "LONG ABSEN", "LONGVISIT"],
+    latVal:      ["LAT VAL", "LATITUDE VAL", "LAT VALIDASI", "LAT OUTLET", "LAT MASTER"],
+    longVal:     ["LONG VAL", "LONGITUDE VAL", "LNG VAL", "LONG VALIDASI",
+                  "LONG OUTLET", "LONG MASTER"],
     alorReason:  ["ALOR REASON", "ALASAN"],
     namaToko:    ["NAMA TOKO", "NAMA OUTLET"],
     alamatToko:  ["ALAMAT TOKO", "ALAMAT OUTLET", "ALAMAT"],
@@ -101,14 +108,27 @@
     return -1;
   }
 
+  // Judul kolom dibandingkan dua kali: apa adanya, lalu setelah semua tanda
+  // baca dan spasi dibuang. Tanpa langkah kedua, "FLAG_RADIUS", "FLAG-RADIUS",
+  // dan "FlagRadius" dianggap kolom yang sama sekali berbeda dari "FLAG RADIUS"
+  // — kolomnya tidak ketemu, isinya terbaca kosong, dan seluruh kunjungan jatuh
+  // ke BLANK tanpa satu pun pesan. Yang dibuang cuma pemisah, bukan hurufnya,
+  // jadi kolom yang memang berbeda tetap tidak akan salah dipasangkan.
+  const kunciKolom = (s) => normalizeHeader(s).replace(/[^A-Z0-9]/g, "");
+
   function buildColIndex(headerRow, colMap) {
     const idx = {};
     const norm = headerRow.map(normalizeHeader);
+    const rapat = headerRow.map(kunciKolom);
     for (const [key, aliases] of Object.entries(colMap)) {
       idx[key] = -1;
       for (const alias of aliases) {
-        const a = normalizeHeader(alias);
-        const at = norm.indexOf(a);
+        const at = norm.indexOf(normalizeHeader(alias));
+        if (at >= 0) { idx[key] = at; break; }
+      }
+      if (idx[key] >= 0) continue;
+      for (const alias of aliases) {
+        const at = rapat.indexOf(kunciKolom(alias));
         if (at >= 0) { idx[key] = at; break; }
       }
     }
@@ -120,6 +140,14 @@
     if (headerAt < 0) throw new Error("Header EDI tidak dikenali (butuh CUSTNO, FLAG RADIUS, ...).");
     const header = aoa[headerAt];
     const idx = buildColIndex(header, EDI_MAP);
+    // Kolom yang tidak ketemu dicatat beserta judul kolom yang BENAR-BENAR ada
+    // di file. Tanpa ini, kolom yang namanya berbeda cuma terbaca kosong dan
+    // tidak ada cara tahu file itu menyebutnya apa — satu-satunya jalan
+    // mengirim filenya ke orang lain untuk dilihat.
+    state.ediHeader = header.map((h) => String(h == null ? "" : h).trim()).filter(Boolean);
+    state.ediKolomTakKetemu = ["flagRadius", "visitDate", "latVisit", "longVisit",
+                               "latVal", "longVal", "setting", "distance"]
+      .filter((k) => idx[k] < 0);
     const rows = [];
     for (let r = headerAt + 1; r < aoa.length; r++) {
       const row = aoa[r] || [];
@@ -171,12 +199,24 @@
     return String(v);
   }
 
+  // Nilai flag tidak selalu 0/1. Sebagian area menulisnya sebagai kata
+  // ("IN RADIUS" / "OUT RADIUS", "Y" / "N"). Kalau kata-kata itu dibiarkan apa
+  // adanya, nilainya bukan "1" dan bukan "0", jadi seluruh kunjungan dihitung
+  // BLANK — terbaca seperti tidak ada validasi sama sekali.
+  const FLAG_KATA = {
+    IN: "1", INRADIUS: "1", Y: "1", YA: "1", YES: "1", TRUE: "1", VALID: "1", OK: "1",
+    OUT: "0", OUTRADIUS: "0", N: "0", NO: "0", TIDAK: "0", FALSE: "0",
+    INVALID: "0", TIDAKVALID: "0",
+  };
+
   function normalizeFlag(v) {
     if (v === null || v === undefined || v === "") return "";
     const s = String(v).trim();
     if (s === "" || s === "-") return ""; // BLANK
     const n = Number(s);
     if (!Number.isNaN(n)) return String(Math.trunc(n));
+    const kata = s.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (FLAG_KATA[kata]) return FLAG_KATA[kata];
     return s;
   }
 
@@ -1283,6 +1323,17 @@
       // peta, dan seluruh usulan titik sekaligus — dan tidak satu pun dari itu
       // meninggalkan pesan. Jadi diperiksa di sini, sekali, dengan angka.
       state.kolomHilang = [];
+      // Kolom yang judulnya tidak dikenali sama sekali: itu sebab paling pokok,
+      // dan gejalanya sama persis dengan kolom yang isinya memang kosong.
+      const NAMA_KOLOM = {
+        flagRadius: "FLAG RADIUS", visitDate: "VISIT DATE", latVisit: "LAT VISIT",
+        longVisit: "LONG VISIT", latVal: "LAT VAL", longVal: "LONG VAL",
+        setting: "SETTING", distance: "DISTANCE",
+      };
+      const takKenal = (state.ediKolomTakKetemu || []).map((k) => NAMA_KOLOM[k] || k);
+      if (takKenal.length) {
+        state.kolomHilang.push({ judulTakKenal: takKenal, header: state.ediHeader || [] });
+      }
       if (results.length) {
         const tanpaKoord = results.filter((r) =>
           titikKosong(angka(r.latVisit), angka(r.longVisit))).length;
@@ -1413,11 +1464,19 @@
         const kh = state.kolomHilang || [];
         // Kolom yang kosong didahulukan dan memakai nada peringatan penuh: ini
         // bukan soal file yang kurang sepadan, tapi data yang memang tidak ada.
+        const takKenalItem = kh.find((k) => k.judulTakKenal);
         const teksKolom = kh.length
-          ? `<b>Ada kolom EDI yang kosong, jadi sebagian isi halaman ini tidak bisa dibuat.</b> `
-            + kh.map((k) => `${escapeHtml(k.apa)} kosong di `
+          ? `<b>Ada kolom EDI yang tidak terbaca, jadi sebagian isi halaman ini tidak bisa `
+            + `dibuat.</b> `
+            + (takKenalItem
+                ? `Judul kolom <b>${escapeHtml(takKenalItem.judulTakKenal.join(", "))}</b> `
+                  + `tidak ada di file ini. Judul kolom yang terbaca: `
+                  + `<i>${escapeHtml(takKenalItem.header.join(" | "))}</i>. `
+                : "")
+            + kh.filter((k) => k.apa).map((k) => `${escapeHtml(k.apa)} kosong di `
                 + `${k.n.toLocaleString("id-ID")} dari ${results.length.toLocaleString("id-ID")} `
-                + `kunjungan &mdash; ${escapeHtml(k.akibat)}`).join(". ") + `. `
+                + `kunjungan &mdash; ${escapeHtml(k.akibat)}`).join(". ")
+            + (kh.some((k) => k.apa) ? `. ` : "")
             + `<details class="warn-more"><summary>Kenapa?</summary><p>`
             + `Kolomnya dicari dengan beberapa nama yang lazim `
             + `(LAT VISIT / LONG VISIT, VISIT DATE atau TANGGAL). Kalau file dari area lain `
