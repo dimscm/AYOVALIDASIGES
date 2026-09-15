@@ -2170,7 +2170,15 @@
   function radiusLayakTanya(rows) {
     const luar = rows.filter((x) => x.flagRadius !== "1");
     if (!luar.length) return null;
-    return luar.length / rows.length >= AMBANG_LUAR ? luar : null;
+    if (luar.length / rows.length < AMBANG_LUAR) return null;
+    // WAJIB diurutkan menurut tanggal. Urutan aslinya urutan baris di file EDI,
+    // dan file itu lazim dikelompokkan per salesman dulu — jadi baris paling
+    // bawah untuk satu outlet belum tentu kunjungan paling akhir. Outlet yang
+    // dikunjungi dua salesman bisa menampilkan "absen terakhir" dari kunjungan
+    // lama milik salesman lain, belasan kilometer dari posisi yang sebenarnya
+    // terakhir. Koordinat yang salah begitu tidak kelihatan salah di kertas.
+    return luar.slice().sort((a, b) =>
+      String(a.tglIso || "").localeCompare(String(b.tglIso || "")));
   }
 
   function masalahOutlet(rows) {
