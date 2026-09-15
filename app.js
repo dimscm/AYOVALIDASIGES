@@ -426,15 +426,65 @@
   }
 
   // Split text as delimited (auto-detect: pipe > tab > semicolon > comma) into AoA.
+  // Memecah satu baris teks jadi kolom, mengikuti aturan CSV: tanda kutip
+  // membungkus isi kolom, dan dua kutip berturut-turut di dalamnya berarti satu
+  // kutip harfiah. Baris tanpa tanda kutip sama sekali dipecah dengan split
+  // biasa — jalur cepat yang penting untuk file EDI ratusan ribu baris.
+  function pecahBaris(line, delim) {
+    if (line.indexOf('"') < 0) return line.split(delim);
+    const out = [];
+    let i = 0;
+    while (i <= line.length) {
+      // Tanda kutip hanya dianggap pembungkus kalau ada TEPAT di awal kolom.
+      // Kutip yang muncul di tengah isi — nama toko seperti TOKO 5" atau
+      // alamat yang memuat inci — adalah huruf biasa. Kalau setiap kutip
+      // dianggap pembungkus, satu kutip nyasar menelan pemisah sesudahnya dan
+      // menggeser SELURUH kolom di baris itu tanpa jejak: rayon terbaca "113",
+      // outlet pindah salesman, dan tidak ada yang kelihatan rusak.
+      if (line[i] === '"') {
+        let isi = "";
+        i++;
+        while (i < line.length) {
+          if (line[i] === '"') {
+            if (line[i + 1] === '"') { isi += '"'; i += 2; continue; }
+            i++; break;
+          }
+          isi += line[i++];
+        }
+        // Sisa sampai pemisah berikutnya diabaikan (spasi, atau isi cacat).
+        while (i < line.length && line[i] !== delim) i++;
+        out.push(isi);
+      } else {
+        let j = line.indexOf(delim, i);
+        if (j < 0) j = line.length;
+        out.push(line.slice(i, j));
+        i = j;
+      }
+      if (i >= line.length) break;
+      i++;   // lewati pemisah
+      if (i === line.length) { out.push(""); break; }
+    }
+    return out;
+  }
+
+  // Pemisah kolom ditebak dari yang PALING SERING muncul di baris judul, bukan
+  // dari yang kebetulan ada duluan. Baris judul isinya nama kolom, jadi aman
+  // dihitung apa adanya: nama kolom tidak memuat pemisah.
+  function tebakPemisah(firstLine) {
+    let terbaik = "|", skor = 0;
+    for (const d of ["|", "\t", ";", ","]) {
+      let n = 0;
+      for (let i = 0; i < firstLine.length; i++) if (firstLine[i] === d) n++;
+      if (n > skor) { skor = n; terbaik = d; }
+    }
+    return terbaik;
+  }
+
   function parseDelimitedText(text) {
     if (!text) return [];
     const firstNl = text.indexOf("\n");
     const firstLine = (firstNl < 0 ? text : text.slice(0, firstNl)).replace(/\r$/, "");
-    let delim = "|";
-    if (firstLine.includes("|")) delim = "|";
-    else if (firstLine.includes("\t")) delim = "\t";
-    else if (firstLine.includes(";")) delim = ";";
-    else if (firstLine.includes(",")) delim = ",";
+    const delim = tebakPemisah(firstLine);
     const rows = [];
     let at = 0;
     while (at < text.length) {
@@ -443,7 +493,7 @@
       const line = text.slice(at, end).replace(/\r$/, "");
       at = end + 1;
       if (!line) continue;
-      rows.push(line.split(delim));
+      rows.push(pecahBaris(line, delim));
     }
     return rows;
   }
@@ -547,13 +597,7 @@
   }
 
   // Deteksi delimiter dari baris header.
-  function detectDelim(firstLine) {
-    if (firstLine.includes("|")) return "|";
-    if (firstLine.includes("\t")) return "\t";
-    if (firstLine.includes(";")) return ";";
-    if (firstLine.includes(",")) return ",";
-    return "|";
-  }
+  const detectDelim = tebakPemisah;
 
   // Universal reader: return array-of-arrays (AoA) dari sumber apa pun.
   // Format ditentukan dari isi file, bukan nama, supaya tetap jalan di HP.
@@ -3326,6 +3370,7 @@
     readAsAoA,
     readRawText,
     detectDelim,
+    pecahBaris,
     parseDelimitedText,
     escapeHtml,
     debounce,

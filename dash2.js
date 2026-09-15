@@ -165,7 +165,7 @@
       if (firstNl < 0) throw new Error("File LBP kosong.");
       const headLine = text.slice(0, firstNl).replace(/\r$/, "");
       const delim = window.M3.detectDelim(headLine);
-      const ix = colIndexes(headLine.split(delim).map((s) => s.trim().toUpperCase()));
+      const ix = colIndexes(window.M3.pecahBaris(headLine, delim).map((s) => s.trim().toUpperCase()));
       let at = firstNl + 1;
       while (at < text.length) {
         let end = text.indexOf("\n", at);
@@ -173,7 +173,7 @@
         const line = text.slice(at, end);
         at = end + 1;
         if (!line) continue;
-        const p = line.split(delim);
+        const p = window.M3.pecahBaris(line, delim);
         pushLine(store, c, ix, (i) => (i >= 0 && p[i] != null ? p[i].trim() : ""));
       }
       text = null;   // lepas string besar supaya bisa dibersihkan GC
