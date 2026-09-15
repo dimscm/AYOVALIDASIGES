@@ -2239,7 +2239,15 @@
         "Kunjungan Discan": `${u.scan} dari ${u.n}`,
         "Jumlah Kunjungan": u.n,
         "Kunjungan Terakhir": u.tglAkhir,
-        "Alasan Terakhir": u.alasan,
+        // Dua kolom ini yang menjawab "sejak kapan": tanggal kunjungan berhasil
+        // yang terakhir, dan tanggal gagal pertama sesudahnya.
+        "Terakhir Berhasil Discan": u.terakhirBerhasil || "",
+        "Mulai Bermasalah": u.mulaiGagal || "",
+        "Alasan Terakhir": u.alasan || "",
+        // Alasan sering tidak dicatat di kunjungan terakhir, padahal ada di
+        // kunjungan gagal sebelumnya. Ditulis beserta tanggalnya supaya tidak
+        // disangka alasan hari terakhir.
+        "Alasan Tercatat": u.alasanTercatat ? `${u.alasanTercatat} (${u.alasanTgl})` : "",
         // Riwayat kunjungan utuh dari EDI, tanpa penyaring apa pun — berguna
         // untuk menilai apakah barcode yang gagal itu sudah lama begitu atau
         // baru sejak outletnya berpindah salesman.
@@ -2396,10 +2404,37 @@
       masalah.push(`<b class="berat">${BARCODE_INFO[bc.bucket].label}</b>`
         + `<span class="kecil">${bc.scan} dari ${bc.n} kunjungan discan`
         + (bc.tglAkhir ? `, terakhir ${escapeHtml(bc.tglAkhir)}` : "")
-        + (bc.alasan ? ` &middot; ${escapeHtml(bc.alasan)}` : "") + `</span>`);
-      tanya.push(bc.alasan
-        ? `Barcode ${escapeHtml(bc.alasan)} &mdash; sudah dilaporkan?`
-        : "Barcode tidak pernah berhasil discan &mdash; kondisinya bagaimana?");
+        + (bc.alasan ? ` &middot; ${escapeHtml(bc.alasan)}`
+            : bc.alasanTercatat
+              ? ` &middot; ${escapeHtml(bc.alasanTercatat)} (${escapeHtml(bc.alasanTgl)})`
+              : ` &middot; tanpa alasan tercatat`)
+        + `</span>`
+        // Pertanyaan pertama yang selalu muncul waktu menanyakan barcode:
+        // sejak kapan. Tanpa tanggalnya, salesman tidak punya pegangan untuk
+        // mengingat apa yang terjadi.
+        + (bc.mulaiGagal
+            ? `<span class="kecil berat">bermasalah sejak ${escapeHtml(bc.mulaiGagal)}`
+              + (bc.terakhirBerhasil ? `, terakhir berhasil ${escapeHtml(bc.terakhirBerhasil)}` : "")
+              + `</span>`
+            : ""));
+      // Pertanyaannya HARUS mengikuti keadaannya. Dulu kalimatnya cuma dua:
+      // ada alasan atau tidak — sehingga outlet "Baru bermasalah" yang alasannya
+      // tidak tercatat ikut ditanya "barcode tidak pernah berhasil discan",
+      // padahal di baris sebelahnya tertulis "2 dari 3 kunjungan discan".
+      // Dua kalimat yang saling membantah di satu baris membuat seluruh
+      // lembarnya tidak bisa dipercaya.
+      const sebabBc = bc.alasan || bc.alasanTercatat;
+      const sejakBc = bc.mulaiGagal ? ` sejak ${escapeHtml(bc.mulaiGagal)}` : "";
+      if (bc.bucket === "BELUM") {
+        tanya.push(`Barcode belum pernah berhasil discan${sejakBc}`
+          + (sebabBc ? ` &mdash; tercatat ${escapeHtml(sebabBc)}. Sudah dilaporkan?`
+                     : ` dan tidak ada alasan tercatat &mdash; kondisinya bagaimana?`));
+      } else {
+        tanya.push(`Barcode dulu bisa discan, gagal${sejakBc}`
+          + (bc.terakhirBerhasil ? ` (terakhir berhasil ${escapeHtml(bc.terakhirBerhasil)})` : "")
+          + (sebabBc ? ` &mdash; tercatat ${escapeHtml(sebabBc)}. Sudah dilaporkan?`
+                     : ` tanpa alasan tercatat &mdash; kondisinya bagaimana?`));
+      }
     }
     return { masalah, tanya, jawab };
   }
@@ -3062,20 +3097,54 @@
       // barcode yang sebenarnya berhasil discan hari itu bisa terbaca gagal
       // hanya karena baris yang gagal kebetulan tercatat belakangan. Berhasil
       // sekali pada hari itu berarti barcodenya bisa discan.
-      const isoAkhir = vs[vs.length - 1].iso;
-      const hariAkhir = vs.filter((v) => v.iso === isoAkhir);
-      const scanAkhir = hariAkhir.some((v) => v.scan);
-      const akhir = hariAkhir.find((v) => v.scan === scanAkhir) || vs[vs.length - 1];
-      const pernahScan = vs.some((v) => v.scan);
-      const pernahGagal = vs.some((v) => !v.scan);
+      // Diringkas per HARI dulu. Satu tanggal bisa punya beberapa baris (dua
+      // salesman, atau satu salesman yang mengulang); yang menentukan apakah
+      // hari itu barcodenya berhasil discan, bukan baris mana yang tercatat
+      // belakangan.
+      const hari = [];
+      for (const v of vs) {
+        const t = hari.length ? hari[hari.length - 1] : null;
+        if (t && t.iso === v.iso) {
+          t.scan = t.scan || v.scan;
+          if (!t.alasan && !v.scan && v.alasan && v.alasan !== "-") t.alasan = v.alasan;
+        } else {
+          hari.push({ iso: v.iso, tgl: v.tgl, scan: v.scan,
+                      alasan: !v.scan && v.alasan && v.alasan !== "-" ? v.alasan : "" });
+        }
+      }
+      const akhir = hari[hari.length - 1];
+      const scanAkhir = akhir.scan;
+      const pernahScan = hari.some((v) => v.scan);
+      const pernahGagal = hari.some((v) => !v.scan);
       let bucket;
       if (scanAkhir) bucket = pernahGagal ? "BERES" : "LANCAR";
       else bucket = pernahScan ? "BARU" : "BELUM";
+
+      // "Baru bermasalah" tidak bisa ditindaklanjuti tanpa tahu SEJAK KAPAN.
+      // Yang dicari hari pertama gagal pada rentetan gagal yang sekarang —
+      // yaitu tepat sesudah kunjungan berhasil yang terakhir.
+      let mulaiGagal = "", terakhirBerhasil = "", alasanTercatat = "", alasanTgl = "";
+      if (!scanAkhir) {
+        let i = hari.length - 1;
+        while (i >= 0 && !hari[i].scan) i--;
+        terakhirBerhasil = i >= 0 ? hari[i].tgl : "";
+        mulaiGagal = hari[i + 1] ? hari[i + 1].tgl : "";
+        // Alasan paling akhir yang benar-benar tercatat di rentetan gagal ini.
+        // Kolom "Alasan Terakhir" sering kosong karena kunjungan terakhirnya
+        // memang tidak mencatat alasan — bukan berarti tidak ada alasan sama
+        // sekali. Tanggalnya ikut ditulis supaya tidak disangka alasan hari itu.
+        for (let j = hari.length - 1; j > i; j--) {
+          if (hari[j].alasan) { alasanTercatat = hari[j].alasan; alasanTgl = hari[j].tgl; break; }
+        }
+      }
+
       info.set(custno, {
         bucket, n: vs.length,
         scan: vs.filter((v) => v.scan).length,
+        hari: hari.length,
         tglAkhir: akhir.tgl,
-        alasan: scanAkhir ? "" : (akhir.alasan && akhir.alasan !== "-" ? akhir.alasan : ""),
+        mulaiGagal, terakhirBerhasil, alasanTercatat, alasanTgl,
+        alasan: scanAkhir ? "" : (akhir.alasan || ""),
       });
       jml[bucket]++;
     }
@@ -3133,12 +3202,21 @@
     const u = state.barcodeByOutlet ? state.barcodeByOutlet.get(r.custno) : null;
     if (!u) return "";
     const info = BARCODE_INFO[u.bucket];
+    const sebab = u.alasan
+      ? ` &middot; ${escapeHtml(u.alasan)}`
+      : u.alasanTercatat
+        ? ` &middot; ${escapeHtml(u.alasanTercatat)} (dicatat ${escapeHtml(u.alasanTgl)})`
+        : ` &middot; tidak ada alasan tercatat`;
+    const sejak = u.mulaiGagal
+      ? `<br>bermasalah sejak ${escapeHtml(u.mulaiGagal)}`
+        + (u.terakhirBerhasil ? `, terakhir berhasil ${escapeHtml(u.terakhirBerhasil)}` : "")
+      : "";
     const rinci = u.bucket === "LANCAR"
       ? `${u.n} kunjungan, semuanya discan`
       : u.bucket === "BERES"
         ? `${u.scan} dari ${u.n} kunjungan discan, terakhir ${escapeHtml(u.tglAkhir)} berhasil`
         : `${u.scan} dari ${u.n} kunjungan discan, terakhir ${escapeHtml(u.tglAkhir)} gagal`
-          + (u.alasan ? ` &middot; ${escapeHtml(u.alasan)}` : "");
+          + sebab + sejak;
     return `<span class="tag tag-bc-${u.bucket}" title="${escapeHtml(info.hint)}">${info.label}</span>`
       + `<span class="titik-sub">${rinci}</span>`
       + riwayatSub(r.custno, u.n);
