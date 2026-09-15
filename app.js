@@ -1986,6 +1986,7 @@
     // supaya angkanya tinggal disalin ke master, tidak perlu dipotong dulu
     // dari tengah kalimat.
     const titik = !u ? ""
+      : u.bucket === "PAS" && u.sebab === "beres" ? "Sudah beres — kunjungan terakhir in radius"
       : u.bucket === "PAS" && u.sebab === "diperbaiki" ? "Sudah diperbaiki setelah tanggal ini"
       : TITIK_TEKS[u.bucket] || "";
     const g = globalOutlet(r.custno);
@@ -2149,12 +2150,14 @@
         // Empat kolom di atas mengikuti saringan tanggal/periode yang dipilih.
         // Yang di bawah ini riwayat utuh outletnya, tanpa penyaring apa pun —
         // termasuk kunjungan oleh salesman yang dulu memegangnya.
+        "Status Radius Terakhir": akhir ? (akhir.flagRadius === "1" ? "In radius" : "Di luar radius") : "",
         "Total Kunjungan (semua periode)": g.n,
         "Total In Radius (semua periode)": g.dalam,
         "Total Di Luar Radius (semua periode)": g.luar,
         "Salesman Pernah Berkunjung": [...g.sls].join("; "),
         "Masalah Outlet": masalah ? MASALAH_INFO[masalah].label : "",
         "Titik Toko": !u ? ""
+          : u.bucket === "PAS" && u.sebab === "beres" ? "Sudah beres — kunjungan terakhir in radius"
           : u.bucket === "PAS" && u.sebab === "diperbaiki" ? "Sudah diperbaiki setelah tanggal ini"
           : TITIK_TEKS[u.bucket] || "",
         Barcode: bc ? BARCODE_INFO[bc.bucket].label : "",
@@ -2273,6 +2276,16 @@
   function radiusLayakTanya(rows) {
     const luar = rows.filter((x) => x.flagRadius !== "1");
     if (!luar.length) return null;
+    // Yang menentukan KUNJUNGAN TERAKHIR. Kalau kunjungan paling akhir sudah
+    // IN RADIUS, masalahnya sudah selesai — entah titiknya sudah dibetulkan
+    // atau salesmannya sudah absen di tempat yang benar. Mencetaknya lagi
+    // membuat orang bertanya-tanya apakah temuan ini masih berlaku atau sisa
+    // masa lalu, dan itu justru menghabiskan waktu di lapangan.
+    // Riwayat lamanya tidak hilang: tetap ada di tabel, di sheet Hasil, dan di
+    // kolom riwayat outlet.
+    const urutTgl = rows.slice().sort((a, b) =>
+      String(a.tglIso || "").localeCompare(String(b.tglIso || "")));
+    if (urutTgl[urutTgl.length - 1].flagRadius === "1") return null;
     if (luar.length / rows.length < AMBANG_LUAR) return null;
     // WAJIB diurutkan menurut tanggal. Urutan aslinya urutan baris di file EDI,
     // dan file itu lazim dikelompokkan per salesman dulu — jadi baris paling
@@ -3043,17 +3056,26 @@
     const jml = { LANCAR: 0, BERES: 0, BARU: 0, BELUM: 0 };
     for (const [custno, vs] of per) {
       vs.sort((a, b) => String(a.iso).localeCompare(String(b.iso)));
-      const akhir = vs[vs.length - 1];
+      // Kunjungan terakhir dinilai PER HARI, bukan per baris. Satu outlet bisa
+      // punya beberapa baris di tanggal yang sama — dua salesman, atau satu
+      // salesman yang mengulang. Kalau yang dipakai cuma baris paling bawah,
+      // barcode yang sebenarnya berhasil discan hari itu bisa terbaca gagal
+      // hanya karena baris yang gagal kebetulan tercatat belakangan. Berhasil
+      // sekali pada hari itu berarti barcodenya bisa discan.
+      const isoAkhir = vs[vs.length - 1].iso;
+      const hariAkhir = vs.filter((v) => v.iso === isoAkhir);
+      const scanAkhir = hariAkhir.some((v) => v.scan);
+      const akhir = hariAkhir.find((v) => v.scan === scanAkhir) || vs[vs.length - 1];
       const pernahScan = vs.some((v) => v.scan);
       const pernahGagal = vs.some((v) => !v.scan);
       let bucket;
-      if (akhir.scan) bucket = pernahGagal ? "BERES" : "LANCAR";
+      if (scanAkhir) bucket = pernahGagal ? "BERES" : "LANCAR";
       else bucket = pernahScan ? "BARU" : "BELUM";
       info.set(custno, {
         bucket, n: vs.length,
         scan: vs.filter((v) => v.scan).length,
         tglAkhir: akhir.tgl,
-        alasan: akhir.scan ? "" : (akhir.alasan && akhir.alasan !== "-" ? akhir.alasan : ""),
+        alasan: scanAkhir ? "" : (akhir.alasan && akhir.alasan !== "-" ? akhir.alasan : ""),
       });
       jml[bucket]++;
     }
@@ -3165,6 +3187,17 @@
       v.push({ la, lo, r });
     }
 
+    // Kunjungan PALING AKHIR tiap outlet di dalam rentang yang dinilai —
+    // dihitung dari seluruh kunjungan, termasuk yang koordinatnya tidak
+    // terekam, karena yang ditanya cuma "terakhir kali masuk radius atau tidak".
+    const akhirPer = new Map();
+    for (const r of state.results) {
+      if (!dalamRentang(r, rg)) continue;
+      const t = String(r.tglIso || "");
+      const p = akhirPer.get(r.custno);
+      if (!p || t > p.t) akhirPer.set(r.custno, { t, flag: r.flagRadius });
+    }
+
     const info = new Map();
     const jml = { kembali: 0, usul: 0, tanya: 0, pas: 0, satu: 0, dampak: 0 };
     for (const [custno, semua] of perOutlet) {
@@ -3174,6 +3207,16 @@
       // titik usulan.
       const vs = semua.filter((v) => v.r.flagRadius !== "1" && dalamRentang(v.r, rg));
       if (!vs.length) continue;   // di rentang ini outlet tidak bermasalah
+      // Sudah beres kalau kunjungan terakhirnya masuk radius. Ditandai, bukan
+      // dibuang, supaya di tabel tetap terbaca "sudah beres" dan bukan hilang
+      // begitu saja — tapi tidak ikut daftar kerja mana pun.
+      const akhir = akhirPer.get(custno);
+      if (akhir && akhir.flag === "1") {
+        info.set(custno, { bucket: "PAS", sebab: "beres", n: semua.length,
+                           masalah: vs.length, tglBeres: akhir.t });
+        jml.pas++;
+        continue;
+      }
       const ref = vs[0].r;
       const set = angka(ref.setting) || RADIUS_DEFAULT;
       const pernahLolos = semua.some((v) => v.r.flagRadius === "1");
@@ -3343,9 +3386,11 @@
     if (u.bucket === "SATU")
       return `<span class="nil">Baru 1 kunjungan bermasalah — belum bisa dinilai</span>`;
     if (u.bucket === "PAS")
-      return u.sebab === "diperbaiki"
-        ? `<span class="nil">Titik toko sudah diperbaiki setelah tanggal ini — tidak perlu tindakan</span>`
-        : `<span class="nil">Titik toko sudah benar — kunjungan lain di outlet ini masuk radius</span>`;
+      return u.sebab === "beres"
+        ? `<span class="nil">Sudah beres — kunjungan terakhir${u.tglBeres ? ` (${tglTampil(u.tglBeres)})` : ""} sudah masuk radius</span>`
+        : u.sebab === "diperbaiki"
+          ? `<span class="nil">Titik toko sudah diperbaiki setelah tanggal ini — tidak perlu tindakan</span>`
+          : `<span class="nil">Titik toko sudah benar — kunjungan lain di outlet ini masuk radius</span>`;
     if (u.bucket === "TANYA")
       return `<span class="nil">Kunjungan berpencar ${jarakTeks(u.sebar)} — tanyakan ke salesman</span>`;
     const kuat = u.salesmanBeda > 1

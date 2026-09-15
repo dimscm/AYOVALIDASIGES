@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>M3 Beverage Mayora</title>
-  <link rel="stylesheet" href="styles.css?v=62" />
+  <link rel="stylesheet" href="styles.css?v=63" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23c8102e'/%3E%3Ctext x='50' y='62' font-size='34' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EM3%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -145,6 +145,19 @@
               <b>kotak pencarian</b>: nama pengunjung ikut dicari di situ.
               Di sheet <b>Usulan Titik</b> dan <b>Barcode Perlu Dicek</b> kolomnya sekarang dipisah
               jelas: <b>Salesman (DMP)</b> pemiliknya, <b>Dikunjungi Oleh</b> yang absen.</p>
+            <p class="hnote"><b>Daftar kerja hanya memuat masalah yang MASIH BERJALAN.</b>
+              Yang menentukan selalu <b>kunjungan terakhir</b>: kalau kunjungan paling akhir sudah
+              IN RADIUS, masalah radiusnya dianggap selesai dan outletnya tidak ikut sheet
+              <b>Usulan Titik</b> maupun <b>lembar cetak</b> — entah titiknya sudah dibetulkan atau
+              salesmannya sudah absen di tempat yang benar. Barcode memakai aturan yang sama: yang
+              dinilai hasil kunjungan terakhir, dan kalau hari itu ada yang berhasil discan, barcode
+              itu terhitung bisa discan walaupun ada baris lain di hari yang sama yang gagal.
+              Datanya sendiri tidak dihapus: di tabel Detail dan sheet <b>Hasil</b> seluruh riwayat
+              tetap ada, dan outlet yang sudah selesai terbaca <i>"Sudah beres — kunjungan terakhir
+              in radius"</i> pada kolom Titik Toko. Sheet <b>Semua Outlet (DMP)</b> juga punya kolom
+              <b>Status Radius Terakhir</b> untuk memeriksanya sendiri. Maksudnya supaya daftar yang
+              dibawa ke lapangan tidak memuat temuan yang sudah Bapak selesaikan minggu lalu —
+              karena kalau itu terjadi, tidak ada cara membedakan mana yang masih perlu dikerjakan.</p>
             <p class="hnote"><b>Sheet "Semua Outlet (DMP)"</b> menjawab pertanyaan sebaliknya: bukan
               "apa yang terjadi pada kunjungan ini", tapi "bagaimana keadaan <b>semua</b> toko saya".
               Sheet <b>Hasil</b> berisi satu baris per <i>kunjungan</i>, jadi outlet yang tidak pernah
@@ -555,7 +568,7 @@
       </section>
     </div>
 
-    <p class="credit">dimscm &middot; v62</p>
+    <p class="credit">dimscm &middot; v63</p>
   </main>
 
   <!-- Lembar cetak per salesman. Disusun saat tombol Cetak ditekan, dan hanya
@@ -566,7 +579,7 @@
   <script src="vendor/jszip.min.js"></script>
   <script src="vendor/7zz.umd.js"></script>
   <script src="vendor/qrcode.js"></script>
-  <script src="app.js?v=62"></script>
-  <script src="dash2.js?v=62"></script>
+  <script src="app.js?v=63"></script>
+  <script src="dash2.js?v=63"></script>
 </body>
 </html>
