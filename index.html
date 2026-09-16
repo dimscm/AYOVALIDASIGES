@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>M3 Beverage Mayora</title>
-  <link rel="stylesheet" href="styles.css?v=69" />
+  <link rel="stylesheet" href="styles.css?v=70" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23c8102e'/%3E%3Ctext x='50' y='62' font-size='34' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EM3%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -347,6 +347,12 @@
               yang dipakai, salesman dengan outlet paling banyak otomatis menang walaupun mutunya
               biasa saja. Nilainya dibuat berskala <b>0&ndash;100</b> supaya gampang dibaca
               (3 poin = 100). Kalau rata-ratanya sama, yang lebih banyak kunjungannya ditaruh di atas.
+              Daftarnya juga tampil <b>di layar</b>, di bawah Ringkasan: sepuluh teratas, dengan
+              tombol untuk membuka daftar penuhnya. Yang di layar mengikuti saringan salesman,
+              rayon, branch, cycle, tanggal, dan kotak pencarian &mdash; tapi <b>tidak</b> dipotong
+              dropdown jenis masalah, persis seperti sheet <b>Hasil</b>: kalau kunjungan yang benar
+              ikut terbuang, yang tersisa cuma kunjungan bermasalah dan nilainya bukan nilai mutu
+              lagi, melainkan nilai dari separuh cerita.
               Salesman yang kunjungannya <b>kurang dari 10</b> tidak diberi nomor peringkat &mdash;
               ditulis di bagian bawah sheet dengan catatannya. Satu kunjungan yang kebetulan
               Flag 1 + Scan menghasilkan nilai 100, dan kalau ikut dirangking ia duduk di peringkat 1
@@ -375,6 +381,20 @@
             </p>
           </div>
         </details>
+
+        <div class="hidden" id="rankSection">
+          <div class="sec-head mt">
+            <h2>Rangking Salesman</h2>
+            <span id="rankInfo" class="count"></span>
+          </div>
+          <p class="rank-nota">Nilai 0&ndash;100 dari mutu tiap kunjungan &mdash; rata-rata per
+            kunjungan, mengikuti saringan yang dipilih. Penjelasannya di
+            <b>&ldquo;Arti kategori&rdquo;</b> di atas.</p>
+          <ol class="rank" id="rankList"></ol>
+          <div class="rank-kaki">
+            <button class="ghost sm hidden" id="rankMore">Lihat semua</button>
+          </div>
+        </div>
 
         <div class="sec-head mt">
           <h2>Detail</h2>
@@ -679,7 +699,7 @@
       </section>
     </div>
 
-    <p class="credit">dimscm &middot; v69</p>
+    <p class="credit">dimscm &middot; v70</p>
   </main>
 
   <!-- Lembar cetak per salesman. Disusun saat tombol Cetak ditekan, dan hanya
@@ -690,7 +710,7 @@
   <script src="vendor/jszip.min.js"></script>
   <script src="vendor/7zz.umd.js"></script>
   <script src="vendor/qrcode.js"></script>
-  <script src="app.js?v=69"></script>
-  <script src="dash2.js?v=69"></script>
+  <script src="app.js?v=70"></script>
+  <script src="dash2.js?v=70"></script>
 </body>
 </html>

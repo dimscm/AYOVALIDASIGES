@@ -1768,9 +1768,68 @@
     });
     state.page = 1;
     renderTable();
+    renderRangking();
     labelTitikFilter();
     labelBarcodeFilter();
     renderFilterInfo();
+  }
+
+  // ---- Rangking di layar ----
+  // Isinya sama dengan sheet "Rangking Salesman" di Excel, dan ikut saringan
+  // yang sedang dipilih. Di layar cuma sepuluh teratas yang ditampilkan:
+  // daftar penuh bisa seratus lebih orang, dan yang dicari waktu melihat layar
+  // biasanya "siapa yang paling perlu ditemani" — bukan seluruh daftar. Sisanya
+  // sejauh satu tombol.
+  const RANK_PENDEK = 10;
+
+  function renderRangking() {
+    const wadah = $("rankSection");
+    if (!wadah) return;
+    const semua = daftarRangking();
+    const berangka = semua.filter((x) => x.peringkat !== "");
+    wadah.classList.toggle("hidden", !semua.length);
+    if (!semua.length) return;
+
+    const panjang = state.rankSemua || semua.length <= RANK_PENDEK;
+    const tampil = panjang ? semua : berangka.slice(0, RANK_PENDEK);
+    const belum = semua.length - berangka.length;
+    $("rankInfo").textContent = berangka.length
+      ? `${berangka.length.toLocaleString("id-ID")} salesman dirangking`
+        + (belum ? ` · ${belum.toLocaleString("id-ID")} belum cukup kunjungan` : "")
+      : `${semua.length.toLocaleString("id-ID")} salesman — semuanya belum cukup kunjungan`;
+
+    $("rankList").innerHTML = tampil.map((x) => {
+      // Lebar batangnya = nilainya. Warnanya mengikuti tiga tingkat yang sama
+      // dengan coverage di Dashboard 2, supaya dibaca dengan cara yang sama.
+      const kelas = x.nilai >= 75 ? "hi" : x.nilai >= 50 ? "mid" : "lo";
+      const nilai = x.nilai.toLocaleString("id-ID", { minimumFractionDigits: 1,
+                                                     maximumFractionDigits: 1 });
+      const sub = x.catatan
+        ? escapeHtml(x.catatan)
+        : `${x.n.toLocaleString("id-ID")} kunjungan &middot; `
+          + `${x.outlet.toLocaleString("id-ID")} outlet`
+          + (x.branch ? ` &middot; ${escapeHtml(x.branch)}` : "")
+          + (x.rayon ? ` &middot; ${escapeHtml(x.rayon)}` : "");
+      return `<li class="rank-baris${x.catatan ? " rank-belum" : ""}">`
+        + `<span class="rank-no">${x.peringkat || "&ndash;"}</span>`
+        + `<span class="rank-isi">`
+        +   `<span class="rank-nama">${escapeHtml(x.nama)}</span>`
+        +   `<span class="rank-sub">${sub}</span>`
+        + `</span>`
+        + `<span class="rank-nilai">`
+        +   `<b class="cov cov-${kelas}">${nilai}</b>`
+        +   `<span class="covbar"><i style="width:${Math.max(2, x.nilai)}%"></i></span>`
+        + `</span>`
+        + `</li>`;
+    }).join("");
+
+    const tombol = $("rankMore");
+    if (tombol) {
+      tombol.classList.toggle("hidden", semua.length <= RANK_PENDEK);
+      tombol.textContent = state.rankSemua
+        ? `Tampilkan ${RANK_PENDEK} teratas saja`
+        : `Lihat semua ${semua.length.toLocaleString("id-ID")} salesman`;
+    }
   }
 
   // Berapa kunjungan yang sedang disembunyikan, dan oleh penyaring yang mana.
@@ -2130,6 +2189,10 @@
   if ($("tglReset")) $("tglReset").addEventListener("click", () => {
     $("tglDari").value = ""; $("tglSampai").value = "";
     hitungTitik(); applyFilters();
+  });
+  if ($("rankMore")) $("rankMore").addEventListener("click", () => {
+    state.rankSemua = !state.rankSemua;
+    renderRangking();
   });
   $("prevPage").addEventListener("click", () => { if (state.page > 1) { state.page--; renderTable(); } });
   $("nextPage").addEventListener("click", () => { state.page++; renderTable(); });
