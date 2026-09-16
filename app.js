@@ -901,7 +901,9 @@
     throw new Error("Sheet kosong.");
   }
 
-  async function parseDmp(file) {
+  // Menerima indeks yang sudah ada supaya beberapa file DMP (satu per cabang)
+  // bisa dituang ke wadah yang sama. Statistiknya ikut dijumlahkan.
+  async function parseDmp(file, idxLama, byLama) {
     // Universal: menerima .txt/.csv/.xlsx/.xls (dan compressed-nya).
     // Kolom yang kita butuh: KODEOUTLET, NAMAOUTLET, ALAMAT, SLSNO, RAYON,
     // SALESMAN, KODESALESFORCE, NAMASALESFORCE, CYCLE.
@@ -916,10 +918,21 @@
     const iRayon = cols.indexOf("RAYON");
     const iCycle = cols.indexOf("CYCLE");
     const iStatus = cols.indexOf("STATUS");
+    // Nama kolomnya KODEBRANCH, bukan BRANCH. Dicari dua-duanya supaya file
+    // dari sumber lain tetap terbaca.
+    const iBranch = ["KODEBRANCH", "BRANCH", "KODE BRANCH"]
+      .map((n) => cols.indexOf(n)).find((i) => i >= 0);
+    const iSubdist = ["NAMASUBDIST", "SUBDIST", "NAMA SUBDIST"]
+      .map((n) => cols.indexOf(n)).find((i) => i >= 0);
     const iStatusReg = cols.indexOf("STATUSREGISTER");
     const cell = (row, i) => i >= 0 && row[i] != null ? String(row[i]).trim() : "";
-    const idx = new Map();
-    const bySalesman = new Map();   // salesman -> [kode outlet] (DMP itu master outlet)
+    const idx = idxLama instanceof Map ? idxLama : new Map();
+    const bySalesman = byLama instanceof Map ? byLama : new Map();
+    // Yang menentukan penjumlahan bukan "ada indeks yang dioper", tapi "indeks
+    // itu sudah berisi". Waktu Proses ditekan dua kali, indeksnya memang dibuat
+    // baru tapi state.dmpStats masih menyimpan angka proses sebelumnya — kalau
+    // itu ikut dijumlahkan, jumlah outletnya berlipat tiap kali ditekan.
+    const stLama = (idx.size && state.dmpStats) || null;
     let count = 0, aktif = 0, ganda = 0;
     for (let r = 1; r < rows.length; r++) {
       const row = rows[r] || [];
@@ -964,6 +977,8 @@
         salesman: sls,
         rayon: ryRow,
         cycle: cell(row, iCycle),
+        branch: iBranch === undefined ? "" : cell(row, iBranch),
+        subdist: iSubdist === undefined ? "" : cell(row, iSubdist),
         // Status hidup/mati disimpan per outlet, bukan cuma dihitung: daftar
         // "semua outlet" tidak boleh memuat 100rb outlet mati.
         aktif: isAktif,
@@ -978,7 +993,13 @@
       if (isAktif) aktif++;
     }
     state.dmpBySalesman = bySalesman;
-    state.dmpStats = { total: count, aktif, mati: count - aktif, salesman: bySalesman.size, ganda };
+    // Angka dari file sebelumnya ikut dijumlahkan, jadi statusnya menggambarkan
+    // seluruh cabang yang diupload, bukan cuma file terakhir.
+    const total = (stLama ? stLama.total : 0) + count;
+    const hidup = (stLama ? stLama.aktif : 0) + aktif;
+    state.dmpStats = { total, aktif: hidup, mati: total - hidup,
+                       salesman: bySalesman.size, ganda: (stLama ? stLama.ganda : 0) + ganda,
+                       file: (stLama ? (stLama.file || 1) : 0) + 1 };
     return { index: idx, count, aktif };
   }
 
@@ -1026,27 +1047,54 @@
     b >= 1048576 ? (b / 1048576).toFixed(1).replace(".", ",") + " MB"
                  : Math.max(1, Math.round(b / 1024)) + " KB";
 
+  // Satu slot bisa menampung beberapa file sekaligus — satu per cabang. Isinya
+  // digabung apa adanya; yang membedakan cabang tetap kode outletnya, jadi tidak
+  // ada yang bisa tertukar. state[kunci] tetap berisi file PERTAMA supaya
+  // seluruh pemeriksaan "ada file atau tidak" yang sudah ada tetap berlaku,
+  // sedangkan daftar lengkapnya di state[kunci + "s"].
   function wireFile(inputId, stateKey, nameId, rowId) {
     $(inputId).addEventListener("change", (e) => {
-      const f = e.target.files[0];
-      state[stateKey] = f;
+      const semua = [...e.target.files];
+      const kosong = semua.filter((f) => f.size === 0);
+      const pakai = semua.filter((f) => f.size > 0);
+      state[stateKey + "s"] = pakai;
+      state[stateKey] = pakai[0] || null;
       const row = $(rowId);
-      if (!f) {
+      if (!semua.length) {
         $(nameId).textContent = "Belum dipilih";
         row.classList.remove("has");
-      } else if (f.size === 0) {
+      } else if (!pakai.length) {
         // Umum di Android: file Google Drive yang belum diunduh terbaca 0 byte.
-        state[stateKey] = null;
-        $(nameId).textContent = `${f.name} — kosong (0 byte), download dulu ke HP`;
+        $(nameId).textContent = `${semua[0].name} — kosong (0 byte), download dulu ke HP`;
         row.classList.remove("has");
-        showError(new Error(`"${f.name}" terbaca 0 byte.`));
+        showError(new Error(`"${semua[0].name}" terbaca 0 byte.`));
       } else {
-        $(nameId).textContent = `${f.name} · ${fmtSize(f.size)}`;
+        const total = pakai.reduce((a, f) => a + f.size, 0);
+        $(nameId).textContent = pakai.length === 1
+          ? `${pakai[0].name} · ${fmtSize(total)}`
+          : `${pakai.length} file · ${fmtSize(total)} — ${pakai.map((f) => f.name).join(", ")}`;
         row.classList.add("has");
         clearError();
+        if (kosong.length) {
+          showError(new Error(`${kosong.length} file terbaca 0 byte dan dilewati: `
+            + `${kosong.map((f) => f.name).join(", ")}. Download dulu ke perangkat ini.`));
+        }
       }
       toggleProcess();
     });
+  }
+
+  const daftarFile = (kunci) => state[kunci + "s"] || (state[kunci] ? [state[kunci]] : []);
+
+  // Tiap file DIPARSE SENDIRI, baru hasilnya digabung. Menggabungkan isi
+  // mentahnya lebih sederhana tapi salah: tiap file punya baris pembuka dan
+  // baris judul sendiri, dan parser hanya mencari judul sekali di awal — judul
+  // file kedua akan terbaca sebagai data.
+  async function parseGabung(kunci, parser) {
+    const files = daftarFile(kunci);
+    const keluar = [];
+    for (const f of files) keluar.push(parser(await readWorkbook(f), f));
+    return keluar;
   }
   wireFile("ediFile", "ediFile", "ediName", "rowEdi");
   wireFile("hhtFile", "hhtFile", "hhtName", "rowHht");
@@ -1055,6 +1103,8 @@
 
   $("resetBtn").addEventListener("click", () => {
     state.ediFile = null; state.hhtFile = null; state.dmpFile = null; state.lbpFile = null;
+    state.ediFiles = []; state.hhtFiles = []; state.dmpFiles = []; state.lbpFiles = [];
+    state.dmpStats = null;
     state.ediRows = []; state.hhtRows = []; state.dmpIndex = new Map(); state.results = []; state.filtered = [];
     $("ediFile").value = ""; $("hhtFile").value = ""; $("dmpFile").value = ""; $("lbpFile").value = "";
     $("ediName").textContent = "Belum dipilih"; $("hhtName").textContent = "Belum dipilih";
@@ -1091,6 +1141,18 @@
     document.querySelectorAll(".filterRayonItem").forEach((c) => (c.checked = false));
     const ryAll = $("filterRayonAll"); if (ryAll) ryAll.checked = true;
     const ryLabel = $("filterRayonLabel"); if (ryLabel) ryLabel.textContent = "Semua rayon";
+    // Branch dan cycle ikut dikosongkan dan disembunyikan lagi — isinya datang
+    // dari file yang baru saja dibuang.
+    for (const [wadah, daftar, kelas, semua, label, kata] of [
+      ["filterBranch", "filterBranchList", "filterBranchItem", "filterBranchAll", "filterBranchLabel", "branch"],
+      ["filterCycle", "filterCycleList", "filterCycleItem", "filterCycleAll", "filterCycleLabel", "cycle"],
+    ]) {
+      document.querySelectorAll("." + kelas).forEach((c) => (c.checked = false));
+      if ($(daftar)) $(daftar).innerHTML = "";
+      if ($(semua)) $(semua).checked = true;
+      if ($(label)) $(label).textContent = "Semua " + kata;
+      if ($(wadah)) $(wadah).classList.add("hidden");
+    }
     $("search").value = "";
     const inkon = $("filterInkonsisten"); if (inkon) inkon.checked = false;
     setStatus("");
@@ -1107,15 +1169,17 @@
       let dmpCount = 0;
       if (state.dmpFile) {
         setStatus("Membaca DMP...");
-        const dmp = await parseDmp(state.dmpFile);
-        state.dmpIndex = dmp.index;
-        dmpCount = dmp.count;
+        for (const f of daftarFile("dmpFile")) {
+          const dmp = await parseDmp(f, state.dmpIndex, state.dmpBySalesman);
+          state.dmpIndex = dmp.index;
+          dmpCount += dmp.count;
+        }
       }
 
       // Dashboard 2 (LBP) — jalan kalau file LBP diupload.
       let d2Msg = "";
       if (state.lbpFile && window.M3D2) {
-        d2Msg = await window.M3D2.process(state.lbpFile, state.dmpIndex, state.dmpBySalesman);
+        d2Msg = await window.M3D2.process(daftarFile("lbpFile"), state.dmpIndex, state.dmpBySalesman);
       }
 
       // Dashboard 1 (EDI) — butuh EDI.
@@ -1138,8 +1202,8 @@
       $("tab1").disabled = false;
 
       setStatus("Membaca EDI...");
-      const ediAoa = await readWorkbook(state.ediFile);
-      state.ediRows = parseEdi(ediAoa);
+      const ediBagian = await parseGabung("ediFile", (aoa) => parseEdi(aoa));
+      state.ediRows = ediBagian.length === 1 ? ediBagian[0] : [].concat(...ediBagian);
       if (!state.ediRows.length) throw new Error("EDI tidak berisi baris data.");
 
       state.scanIndex = new Map();
@@ -1151,12 +1215,12 @@
       state.alasanByOutlet = new Map();
       if (state.hhtFile) {
         setStatus("Membaca HHT...");
-        const hhtAoa = await readWorkbook(state.hhtFile);
-        const parsed = parseHht(hhtAoa);
-        state.hhtRows = parsed.rows;
-        state.hhtCabang = parsed.cabang || "";
-        state.hhtOutletSet = new Set(parsed.rows.map((h) => String(h.custno || "").trim()));
-        hhtWarn = parsed.warn || "";
+        const hhtBagian = await parseGabung("hhtFile", (aoa) => parseHht(aoa));
+        state.hhtRows = hhtBagian.length === 1
+          ? hhtBagian[0].rows : [].concat(...hhtBagian.map((x) => x.rows));
+        state.hhtCabang = [...new Set(hhtBagian.map((x) => x.cabang).filter(Boolean))].join(", ");
+        state.hhtOutletSet = new Set(state.hhtRows.map((h) => String(h.custno || "").trim()));
+        hhtWarn = [...new Set(hhtBagian.map((x) => x.warn).filter(Boolean))].join(" ");
         // Dijodohkan per outlet DAN per tanggal. Kalau hanya per outlet, kunjungan
         // tanggal 24 Agustus bisa mengambil alasan & status scan dari kunjungan
         // tanggal 5 Agustus — kategorinya jadi salah, bukan cuma alasannya.
@@ -1218,6 +1282,9 @@
         // rayon. Ditandai supaya tidak disangka rayon saat difilter.
         const rayonEff = (dmp && dmp.rayon) || (r.team ? `${String(r.team).trim()} (TEAM)` : "");
         const cycleEff = (dmp && dmp.cycle) || r.cycle || "";
+        // Cabang diambil dari DMP (KODEBRANCH). Dipakai menyaring waktu
+        // beberapa cabang diupload sekaligus.
+        const branchEff = (dmp && dmp.branch) || "";
         // Alasan boleh dipinjam dari tanggal lain (ditandai di tabel). Status scan
         // dan kategori TIDAK — itu bukti kunjungan hari itu, tidak boleh dipinjam.
         const alasanLuar = hht ? null : (state.alasanByOutlet.get(r.custno) || null);
@@ -1240,8 +1307,8 @@
         // tanggal kunjungan jadi penggantinya.
         const periodeEff = String(r.periode ?? "").trim() || (tgl ? "Bulan " + tgl.split("-")[1] : "");
         return { ...r, hht, hhtNote, alasanLuar, dmp, category: cat, namaTokoEff, salesmanEff,
-                 salesmanDmp, alamatEff, rayonEff, cycleEff, diLuarHht, takAdaHht, diLuarTgl,
-                 periodeEff,
+                 salesmanDmp, alamatEff, rayonEff, cycleEff, branchEff,
+                 diLuarHht, takAdaHht, diLuarTgl, periodeEff,
                  tglIso: tglIso(r.visitDate) };
       });
 
@@ -1266,6 +1333,7 @@
       }
       state.results = results;
       hitungGlobal();
+      hitungFrekuensi();
       hitungBarcode();
       hitungTitik();
 
@@ -1284,6 +1352,14 @@
           return ta - tb || a.localeCompare(b, "id", { numeric: true });
         });
       populateRayon(rayons);
+      // Branch dan Cycle ikut jadi penyaring. Branch baru berguna kalau beberapa
+      // cabang diupload sekaligus, jadi penyaringnya disembunyikan kalau cuma
+      // ada satu — daripada memajang dropdown yang isinya satu pilihan.
+      const branches = [...new Set(results.map((r) => r.branchEff).filter(Boolean))].sort();
+      populateBranch(branches);
+      const cycles = [...new Set(results.map((r) => r.cycleEff).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, "id", { numeric: true }));
+      populateCycle(cycles);
       // Kotak tanggal diisi rentang penuh datanya. Dibiarkan kosong berarti
       // "semua tanggal", jadi tidak ada yang tersaring diam-diam.
       const semuaTgl = results.map((r) => r.tglIso).filter(Boolean).sort();
@@ -1551,6 +1627,16 @@
       .filter((c) => c.checked).map((c) => c.value));
   }
 
+  function getSelectedBranch() {
+    return new Set([...document.querySelectorAll(".filterBranchItem")]
+      .filter((c) => c.checked).map((c) => c.value));
+  }
+
+  function getSelectedCycle() {
+    return new Set([...document.querySelectorAll(".filterCycleItem")]
+      .filter((c) => c.checked).map((c) => c.value));
+  }
+
   // Base set for the summary: salesman + search + inkonsisten toggle, but NOT category.
   // (Summary is the category breakdown itself.)
   // opsi.abaikanHht — pakai semua kunjungan tanpa memandang cakupan HHT.
@@ -1561,6 +1647,8 @@
     const q = $("search").value.trim().toLowerCase();
     const sms = getSelectedSalesmen();
     const rys = getSelectedRayon();
+    const brs = getSelectedBranch();
+    const cys = getSelectedCycle();
     const onlyMixed = $("filterInkonsisten") && $("filterInkonsisten").checked;
     const kel = $("filterTitik") ? $("filterTitik").value : "";
     const hanyaHht = $("filterPeriodeHht") && $("filterPeriodeHht").checked;
@@ -1596,6 +1684,9 @@
       // pencarian: namanya ikut dicari di kolom pengunjung.
       if (sms.size > 0 && !sms.has(r.salesmanDmp || r.salesmanEff)) return false;
       if (rys.size > 0 && !rys.has(r.rayonEff)) return false;
+      // Branch dan cycle menempel pada OUTLET menurut DMP, sama seperti rayon.
+      if (brs.size > 0 && !brs.has(r.branchEff)) return false;
+      if (cys.size > 0 && !cys.has(r.cycleEff)) return false;
       if (q) {
         const hay = [r.custno, r.namaTokoEff, r.salesmanEff, r.salesmanDmp, r.rayonEff, r.alamatEff, r.alorReason,
                      alasanHht(r), r.alasanLuar && r.alasanLuar.alasan]
@@ -1645,6 +1736,10 @@
     if (nRay) aktif.push(`${nRay} rayon`);
     const nPer = getSelectedPeriode().size;
     if (nPer) aktif.push(`${nPer} periode`);
+    const nBr = getSelectedBranch().size;
+    if (nBr) aktif.push(`${nBr} branch`);
+    const nCy = getSelectedCycle().size;
+    if (nCy) aktif.push(`${nCy} cycle`);
     const rg = rentangTanggal();
     if (rg.dari || rg.sampai) {
       aktif.push(`tanggal ${rg.dari ? tglTampil(rg.dari) : "awal"} s/d `
@@ -1685,14 +1780,18 @@
   // Mengosongkan penyaring saja — file yang sudah diproses tetap dipakai.
   function hapusSemuaFilter() {
     $("search").value = "";
-    document.querySelectorAll(".filterCategoryItem, .filterSalesmanItem, .filterRayonItem, .filterPeriodeItem")
+    document.querySelectorAll(".filterCategoryItem, .filterSalesmanItem, .filterRayonItem, "
+      + ".filterPeriodeItem, .filterBranchItem, .filterCycleItem")
       .forEach((c) => (c.checked = false));
-    ["filterCategoryAll", "filterSalesmanAll", "filterRayonAll", "filterPeriodeAll"]
+    ["filterCategoryAll", "filterSalesmanAll", "filterRayonAll", "filterPeriodeAll",
+     "filterBranchAll", "filterCycleAll"]
       .forEach((id) => { if ($(id)) $(id).checked = true; });
     if (catCtrl) catCtrl.updateLabel();
     if (smCtrl) smCtrl.updateLabel();
     if (ryCtrl) ryCtrl.updateLabel();
     if (pdCtrl) pdCtrl.updateLabel();
+    if (brCtrl) brCtrl.updateLabel();
+    if (cyCtrl) cyCtrl.updateLabel();
     if ($("filterPeriodeHht")) $("filterPeriodeHht").checked = false;
     if ($("filterInkonsisten")) $("filterInkonsisten").checked = false;
     if ($("filterTitik")) $("filterTitik").value = "";
@@ -1881,6 +1980,35 @@
   const pdCtrl = wireMulti("filterPeriode", "filterPeriodeBtn", "filterPeriodeMenu",
     "filterPeriodeAll", "filterPeriodeItem", "filterPeriodeLabel", "periode");
 
+  const brCtrl = wireMulti("filterBranch", "filterBranchBtn", "filterBranchMenu",
+    "filterBranchAll", "filterBranchItem", "filterBranchLabel", "branch");
+
+  const cyCtrl = wireMulti("filterCycle", "filterCycleBtn", "filterCycleMenu",
+    "filterCycleAll", "filterCycleItem", "filterCycleLabel", "cycle");
+
+  // Isi daftar centang sebuah penyaring. Bentuknya sama untuk branch dan cycle,
+  // jadi ditulis sekali: daftar nilai -> daftar <label>, lalu dipasangi pemicu.
+  // Penyaring yang isinya kurang dari dua pilihan disembunyikan — dropdown
+  // berisi satu pilihan cuma memenuhi layar tanpa bisa menyaring apa pun.
+  function isiFilter(listId, kelas, ctrl, wadahId, names) {
+    const list = $(listId);
+    if (!list) return;
+    list.innerHTML = names.map((n) => {
+      const safe = escapeHtml(n);
+      return `<label class="multi-opt"><input type="checkbox" value="${safe}" class="${kelas}" /> ${safe}</label>`;
+    }).join("");
+    list.querySelectorAll("." + kelas).forEach((c) => {
+      c.addEventListener("change", () => { ctrl.updateLabel(); applyFilters(); });
+    });
+    ctrl.updateLabel();
+    if ($(wadahId)) $(wadahId).classList.toggle("hidden", names.length < 2);
+  }
+
+  const populateBranch = (names) =>
+    isiFilter("filterBranchList", "filterBranchItem", brCtrl, "filterBranch", names);
+  const populateCycle = (names) =>
+    isiFilter("filterCycleList", "filterCycleItem", cyCtrl, "filterCycle", names);
+
   function populatePeriode(names) {
     const list = $("filterPeriodeList");
     if (!list) return;
@@ -1957,7 +2085,8 @@
     "Lat Val", "Long Val", "HHT", "Tipe Scan", "Alasan HHT", "Alasan Dari Tanggal",
     "Alor Reason", "Saran", "Barcode", "Kunjungan Discan", "Alasan Terakhir",
     "Titik Toko", "Lat Usulan", "Long Usulan", "Keyakinan Usulan", "Catatan Usulan",
-    "Total Kunjungan Outlet", "Total Di Luar Radius", "Salesman Pernah Berkunjung"];
+    "Total Kunjungan Outlet", "Total Di Luar Radius", "Salesman Pernah Berkunjung",
+    "Branch", "Kunjungan Tiap (hari)", "Cycle Seharusnya (hari)", "Selisih Cycle (hari)"];
 
   const TITIK_TEKS = {
     USUL: "Perlu diperbaiki",
@@ -1990,6 +2119,8 @@
       : u.bucket === "PAS" && u.sebab === "diperbaiki" ? "Sudah diperbaiki setelah tanggal ini"
       : TITIK_TEKS[u.bucket] || "";
     const g = globalOutlet(r.custno);
+    const fr = frekOutlet(r.custno);
+    const tgtCycle = cycleHari(r.cycleEff);
     const adaUsulan = u && (u.bucket === "USUL" || u.bucket === "KEMBALI");
     const masalah = sisiMasalah(r);
     return [
@@ -2007,6 +2138,9 @@
       adaUsulan ? koordTeks(u.mLat) : "", adaUsulan ? koordTeks(u.mLon) : "",
       adaUsulan ? u.yakin : "", u ? catatanUsulan(u) : "",
       g.n, g.luar, [...g.sls].join("; "),
+      r.branchEff || "",
+      fr.hari ?? "", tgtCycle ?? "",
+      (fr.hari !== null && fr.hari !== undefined && tgtCycle) ? fr.hari - tgtCycle : "",
     ];
   }
 
@@ -2084,6 +2218,98 @@
     return usulan;
   }
 
+  // ================= Rangking salesman =================
+  // Satu angka yang bisa diurutkan, disusun dari dua hal yang selama ini
+  // dinilai terpisah: radius dan scan barcode. Kunjungan yang lolos dua-duanya
+  // bernilai penuh; yang lolos salah satu bernilai separuh; yang tidak
+  // memberi bukti apa pun bernilai nol.
+  //
+  // Yang dipakai RATA-RATA per kunjungan, bukan total. Total selalu dimenangkan
+  // salesman berwilayah besar — itu mengukur luas rayon, bukan mutu kerjanya.
+  // Supaya sampel kecil tidak menipu, jumlah kunjungannya ikut ditampilkan.
+  const POIN = {
+    "1-SCAN": 3,        // masuk radius dan barcodenya discan — bukti terkuat
+    "1-NOSCAN": 2,      // radius benar, barcode belum
+    "0-SCAN": 2,        // barcode discan, tapi absennya di luar radius
+    "BLANK-SCAN": 1,    // discan tapi radiusnya belum tervalidasi sama sekali
+    "0-NOSCAN": 0,      // tidak ada bukti radius maupun scan
+    "BLANK-NOSCAN": 0,  // outlet tidak ketemu
+  };
+  const POIN_MAX = 3;
+
+  // Batas kunjungan supaya ikut dirangking. Rata-rata poin itu pecahan: satu
+  // kunjungan yang kebetulan flag 1 + scan menghasilkan nilai 100 dan langsung
+  // duduk di peringkat 1, mengalahkan orang yang mengerjakan dua ratus
+  // kunjungan dengan mutu nyata. Yang di bawah batas tetap ditulis lengkap di
+  // bagian bawah sheet, hanya tanpa nomor peringkat.
+  const MIN_KUNJUNGAN = 10;
+
+  function daftarRangking() {
+    const per = new Map();
+    for (const r of kunjunganTerpilih()) {
+      // Dinilai salesman yang BERKUNJUNG: yang dirangking mutu kerjanya di
+      // lapangan, bukan siapa yang memegang outletnya di master.
+      const nama = r.salesmanEff || "(tanpa nama salesman)";
+      let v = per.get(nama);
+      if (!v) {
+        v = { nama, n: 0, poin: 0, outlet: new Set(), rayon: new Set(), branch: new Set(), kat: {} };
+        for (const k of Object.keys(CATEGORY_INFO)) v.kat[k] = 0;
+        per.set(nama, v);
+      }
+      v.n++;
+      v.poin += POIN[r.category] || 0;
+      v.kat[r.category]++;
+      v.outlet.add(r.custno);
+      if (r.rayonEff) v.rayon.add(r.rayonEff);
+      if (r.branchEff) v.branch.add(r.branchEff);
+    }
+    const baris = [...per.values()].map((v) => {
+      const rata = v.n ? v.poin / v.n : 0;
+      return {
+        nama: v.nama, n: v.n, poin: v.poin, rata,
+        nilai: Math.round((rata / POIN_MAX) * 1000) / 10,   // 0-100
+        outlet: v.outlet.size,
+        rayon: [...v.rayon].sort().join(", "),
+        branch: [...v.branch].sort().join(", "),
+        kat: v.kat,
+      };
+    });
+    // Rata-rata dulu, lalu jumlah kunjungan: dua salesman dengan mutu sama,
+    // yang mengerjakan lebih banyak kunjungan pantas di atas.
+    const urut = (a, b) => b.rata - a.rata || b.n - a.n
+      || String(a.nama).localeCompare(String(b.nama));
+    const cukup = baris.filter((x) => x.n >= MIN_KUNJUNGAN).sort(urut);
+    const sedikit = baris.filter((x) => x.n < MIN_KUNJUNGAN).sort(urut);
+    cukup.forEach((x, i) => { x.peringkat = i + 1; });
+    sedikit.forEach((x) => {
+      x.peringkat = "";
+      x.catatan = `Baru ${x.n} kunjungan — belum cukup untuk dirangking `
+        + `(minimal ${MIN_KUNJUNGAN})`;
+    });
+    return [...cukup, ...sedikit];
+  }
+
+  function sheetRangking(baris) {
+    return baris.map((x) => ({
+      Peringkat: x.peringkat,
+      Salesman: x.nama,
+      Catatan: x.catatan || "",
+      Branch: x.branch,
+      Rayon: x.rayon,
+      "Nilai (0-100)": x.nilai,
+      "Rata-rata Poin": Math.round(x.rata * 100) / 100,
+      "Total Poin": x.poin,
+      "Jumlah Kunjungan": x.n,
+      "Jumlah Outlet": x.outlet,
+      "Flag 1 + Scan": x.kat["1-SCAN"],
+      "Flag 1 + Tidak scan": x.kat["1-NOSCAN"],
+      "Flag 0 + Scan": x.kat["0-SCAN"],
+      "Flag 0 + Tidak scan": x.kat["0-NOSCAN"],
+      "Blank + Scan": x.kat["BLANK-SCAN"],
+      "Blank + Tidak scan": x.kat["BLANK-NOSCAN"],
+    }));
+  }
+
   // ================= Semua outlet DMP pada saringan yang dipilih =================
   // Sheet "Hasil" berisi satu baris per KUNJUNGAN, jadi outlet yang tidak
   // pernah dikunjungi sama sekali tidak muncul di situ — padahal justru itu
@@ -2133,12 +2359,19 @@
       const masalah = vs.length ? sisiMasalah(vs[0]) : "";
       const pengunjung = [...new Set(vs.map((x) => x.salesmanEff).filter(Boolean))];
       const g = globalOutlet(kode);
+      const fr = frekOutlet(kode);
+      const tgtCycle = cycleHari(d.cycle);
       baris.push({
         "Kode Outlet": kode,
         "Nama Toko": d.namaOutlet || "",
         "Salesman (DMP)": d.salesman || "",
         "Rayon (DMP)": d.rayon || "",
+        Branch: d.branch || "",
         Cycle: d.cycle || "",
+        "Kunjungan Tiap (hari)": fr.hari ?? "",
+        "Cycle Seharusnya (hari)": tgtCycle ?? "",
+        "Selisih Cycle (hari)":
+          (fr.hari !== null && fr.hari !== undefined && tgtCycle) ? fr.hari - tgtCycle : "",
         "Alamat (DMP)": d.alamat || "",
         "Penugasan Lain": (d.alt || []).map((a) => `${a.s}${a.r ? ` (${a.r})` : ""}`).join("; "),
         Status: vs.length ? "Ada kunjungan" : "Belum pernah dikunjungi",
@@ -2645,6 +2878,10 @@
         const semua = daftarSemuaOutlet();
         if (semua.length)
           XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(semua), "Semua Outlet (DMP)");
+        const rangking = daftarRangking();
+        if (rangking.length)
+          XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sheetRangking(rangking)),
+            "Rangking Salesman");
         // Lewat unduh(), bukan XLSX.writeFile: writeFile membuat tautan
         // unduhannya sendiri, dan tautan itu mati di dalam artifact.
         const buf = XLSX.write(wb, { type: "array", bookType: "xlsx" });
@@ -2654,6 +2891,7 @@
         if (usulan.length) isi.push(`Usulan Titik ${usulan.length.toLocaleString("id-ID")} outlet`);
         if (barcode.length) isi.push(`Barcode Perlu Dicek ${barcode.length.toLocaleString("id-ID")} outlet`);
         if (semua.length) isi.push(`Semua Outlet (DMP) ${semua.length.toLocaleString("id-ID")} outlet`);
+        if (rangking.length) isi.push(`Rangking Salesman ${rangking.length.toLocaleString("id-ID")} orang`);
         const belum = semua.filter((x) => x.Status === "Belum pernah dikunjungi").length;
         pesanExport(`File berisi: ${isi.join(" &middot; ")}. Semua sheet memakai kumpulan toko `
           + `yang sama — outlet milik salesman/rayon yang dipilih menurut DMP. Sheet <b>Hasil</b> `
@@ -3066,6 +3304,44 @@
     // dan itu pertanyaan tentang EDI.
     state.globalByOutlet = per;
   }
+
+  // Berapa hari sekali outlet ini benar-benar dikunjungi, dihitung dari jarak
+  // rata-rata antar tanggal kunjungan. Butuh minimal dua tanggal berbeda —
+  // satu kunjungan tidak punya jarak.
+  // Dibandingkan dengan cycle di master: "Weekly" 7 hari, "Be Weekly" 14 hari,
+  // "Monthly" 30 hari. Yang dilaporkan selisihnya, bukan vonis: cycle di master
+  // pun bisa salah, dan itu sendiri temuan.
+  const CYCLE_HARI = { WEEKLY: 7, BEWEEKLY: 14, MONTHLY: 30 };
+
+  function cycleHari(teks) {
+    const k = String(teks || "").toUpperCase().replace(/[^A-Z]/g, "");
+    for (const [nama, hari] of Object.entries(CYCLE_HARI)) if (k.startsWith(nama)) return hari;
+    return null;
+  }
+
+  function hitungFrekuensi() {
+    const per = new Map();
+    for (const r of state.results || []) {
+      const t = r.tglIso;
+      if (!t) continue;
+      let v = per.get(r.custno);
+      if (!v) { v = new Set(); per.set(r.custno, v); }
+      v.add(t);
+    }
+    const info = new Map();
+    for (const [custno, set] of per) {
+      const tgl = [...set].sort();
+      if (tgl.length < 2) { info.set(custno, { hari: null, n: tgl.length }); continue; }
+      const awal = Date.parse(tgl[0]), akhir = Date.parse(tgl[tgl.length - 1]);
+      const rentang = Math.round((akhir - awal) / 86400000);
+      info.set(custno, { hari: Math.round(rentang / (tgl.length - 1)), n: tgl.length,
+                         awal: tgl[0], akhir: tgl[tgl.length - 1] });
+    }
+    state.frekByOutlet = info;
+  }
+
+  const frekOutlet = (custno) =>
+    (state.frekByOutlet && state.frekByOutlet.get(custno)) || { hari: null, n: 0 };
 
   // Dipakai di beberapa tempat, jadi bentuknya disamakan sekali di sini.
   const globalOutlet = (custno) =>
@@ -3562,8 +3838,12 @@
     getDmpIndex: () => state.dmpIndex,
     getDmpBySalesman: () => state.dmpBySalesman || new Map(),
     getDmpStats: () => state.dmpStats || null,
+    // Dipakai untuk memeriksa hasil hitungan dari luar (uji otomatis dan
+    // console) — bukan bagian dari tampilan, jadi tidak ada yang berubah
+    // kalau isinya dibaca.
+    getState: () => state,
     getFiles: () => ({ lbp: state.lbpFile }),
-    onLbpFile: (f) => { state.lbpFile = f; },
+    onLbpFile: (f) => { state.lbpFile = f; state.lbpFiles = f ? [f] : []; },
     showDash,
   };
 })();

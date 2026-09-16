@@ -28,41 +28,43 @@
 
       <div class="filelist">
         <label class="frow" id="rowEdi">
-          <input type="file" id="ediFile" accept="*/*" />
+          <input type="file" id="ediFile" accept="*/*" multiple />
           <span class="fmark"></span>
           <span class="fmain">
             <b>EDI Flag Radius</b>
             <i class="ftag">Validasi kunjungan</i>
+            <span class="fhint">Boleh pilih beberapa file sekaligus &mdash; misalnya satu file per cabang</span>
             <span class="fname" id="ediName">Belum dipilih</span>
           </span>
           <span class="fbtn">Pilih</span>
         </label>
 
         <label class="frow" id="rowHht">
-          <input type="file" id="hhtFile" accept="*/*" />
+          <input type="file" id="hhtFile" accept="*/*" multiple />
           <span class="fmark"></span>
           <span class="fmain">
             <b>HHT / Scan</b>
             <i class="ftag">Validasi kunjungan</i>
-            <span class="fhint">Excel, CSV, atau PDF</span>
+            <span class="fhint">Excel, CSV, atau PDF &mdash; boleh pilih beberapa file sekaligus</span>
             <span class="fname" id="hhtName">Belum dipilih</span>
           </span>
           <span class="fbtn">Pilih</span>
         </label>
 
         <label class="frow" id="rowDmp">
-          <input type="file" id="dmpFile" accept="*/*" />
+          <input type="file" id="dmpFile" accept="*/*" multiple />
           <span class="fmark"></span>
           <span class="fmain">
             <b>Master Data DMP</b>
             <i class="ftag both">Keduanya</i>
+            <span class="fhint">Boleh pilih beberapa file sekaligus &mdash; misalnya satu file per cabang</span>
             <span class="fname" id="dmpName">Belum dipilih</span>
           </span>
           <span class="fbtn">Pilih</span>
         </label>
 
         <label class="frow" id="rowLbp">
-          <input type="file" id="lbpFile" accept="*/*" />
+          <input type="file" id="lbpFile" accept="*/*" multiple />
           <span class="fmark"></span>
           <span class="fmain">
             <b>LBP &mdash; Laporan Penjualan</b>
@@ -302,6 +304,51 @@
               radiusnya: satu kali OUT RADIUS belum tentu pola. Kalau file HHT tidak diupload, atau
               outletnya tidak tercakup file itu, sisi barcodenya memang tidak bisa dinilai — jadi
               yang disebut hanya sisi radius.</p>
+            <p class="hnote"><b>Beberapa cabang sekaligus.</b> Tiap kotak file boleh diisi
+              <b>lebih dari satu file</b> &mdash; tekan Pilih, lalu tandai semuanya. Kalau tiap cabang
+              mengirim filenya sendiri, masukkan saja semuanya bersamaan: isinya digabung jadi satu
+              kumpulan data, dan judul kolom tiap file dibaca sendiri-sendiri, jadi cabang yang
+              menulis judul kolomnya sedikit berbeda tetap terbaca. Yang digabung hanya file sejenis
+              (EDI dengan EDI, DMP dengan DMP), dan outlet yang sama muncul di dua file DMP tidak
+              dihitung dua kali. Peringatan &quot;HHT tidak bertemu EDI&quot; tetap berlaku: kalau tidak ada
+              satu pun outlet yang beririsan, berarti filenya memang dari cabang yang berbeda dan
+              sisi barcodenya tidak bisa dinilai.</p>
+            <p class="hnote"><b>Saringan &quot;Semua branch&quot;</b> membaca kolom <b>KODEBRANCH</b> di DMP,
+              jadi setelah beberapa cabang digabung, tiap cabang masih bisa dilihat sendiri-sendiri.
+              Branch menempel pada <i>outlet</i> menurut DMP, sama seperti salesman dan rayon
+              &mdash; bukan pada siapa yang kebetulan absen di situ. Dropdown ini hanya muncul kalau
+              DMP-nya memang punya kolom branch, dan seperti saringan lain, angka di dalam
+              kurung ikut mengecil mengikuti saringan yang sedang aktif.</p>
+            <p class="hnote"><b>Sheet &quot;Rangking Salesman&quot;</b> di Export Excel menilai mutu kerja
+              lapangan dari dua hal yang memang terekam: <b>validasi radius</b> dan <b>scan barcode</b>.
+              Tiap kunjungan dapat poin &mdash; <b>Flag 1 + Scan 3 poin</b> (dua-duanya terbukti),
+              <b>Flag 1 + Tidak scan 2</b> dan <b>Flag 0 + Scan 2</b> (satu sisi terbukti),
+              <b>Blank + Scan 1</b> (ada bukti scan tapi tidak tervalidasi), sisanya <b>0</b>.
+              Yang dirangking <b>rata-rata poin per kunjungan</b>, bukan totalnya: kalau totalnya
+              yang dipakai, salesman dengan outlet paling banyak otomatis menang walaupun mutunya
+              biasa saja. Nilainya dibuat berskala <b>0&ndash;100</b> supaya gampang dibaca
+              (3 poin = 100). Kalau rata-ratanya sama, yang lebih banyak kunjungannya ditaruh di atas.
+              Salesman yang kunjungannya <b>kurang dari 10</b> tidak diberi nomor peringkat &mdash;
+              ditulis di bagian bawah sheet dengan catatannya. Satu kunjungan yang kebetulan
+              Flag 1 + Scan menghasilkan nilai 100, dan kalau ikut dirangking ia duduk di peringkat 1
+              mengalahkan orang yang mengerjakan ratusan kunjungan dengan mutu nyata.
+              Rincian tiap kategori ikut ditulis sebagai kolom sendiri, jadi kelihatan nilai rendahnya
+              datang dari mana. Yang dinilai <b>salesman yang berkunjung</b>, bukan pemilik outlet di
+              master &mdash; ini soal apa yang dikerjakan di lapangan. Perlu diingat, ini mengukur
+              <i>mutu pencatatan kunjungan</i>, bukan penjualan: outlet yang barcodenya memang belum
+              terpasang akan menurunkan nilai salesmannya tanpa itu salahnya, jadi baca bersama
+              kolom <b>Barcode</b>.</p>
+            <p class="hnote"><b>Cycle kunjungan.</b> DMP menyebutkan outlet ini semestinya dikunjungi
+              tiap berapa lama (Weekly, Be Weekly, Monthly). Di Excel ditambahkan tiga kolom yang
+              membandingkannya dengan kenyataan: <b>Kunjungan Tiap (hari)</b> &mdash; jarak rata-rata
+              antar tanggal kunjungan yang benar-benar terjadi, <b>Cycle Seharusnya (hari)</b>
+              (Weekly 7, Be Weekly 14, Monthly 30), dan <b>Selisih Cycle (hari)</b>. Selisih
+              <b>positif</b> berarti kunjungannya lebih jarang daripada seharusnya, <b>negatif</b>
+              berarti lebih sering. Butuh minimal dua tanggal kunjungan &mdash; satu kunjungan tidak
+              punya jarak, jadi kolomnya dikosongkan. Angkanya dihitung dari <b>seluruh riwayat
+              outlet</b>, siapa pun yang mengerjakan, supaya outlet yang baru dioper tidak terlihat
+              seperti tidak pernah dikunjungi. Ini laporan, bukan vonis: cycle di master sendiri bisa
+              salah, dan selisih yang besar justru sering berarti cycle-nya yang perlu diperbaiki.</p>
             <p class="hnote"><b>Konsistensi</b> membandingkan semua kunjungan di outlet yang sama:
               <span class="tag-cons cons-VALID">Konsisten Valid</span> semua kunjungan IN RADIUS &middot;
               <span class="tag-cons cons-PROBLEM">Konsisten Bermasalah</span> semua OUT RADIUS/BLANK &middot;
@@ -351,6 +398,26 @@
               <label class="multi-opt all"><input type="checkbox" id="filterRayonAll" checked /> ↺ Semua rayon</label>
               <div class="multi-sep"></div>
               <div id="filterRayonList"></div>
+            </div>
+          </div>
+          <div class="multi hidden" id="filterBranch">
+            <button type="button" class="multi-btn" id="filterBranchBtn">
+              <span id="filterBranchLabel">Semua branch</span><span class="chev">&#9662;</span>
+            </button>
+            <div class="multi-menu" id="filterBranchMenu" hidden>
+              <label class="multi-opt all"><input type="checkbox" id="filterBranchAll" checked /> &#8634; Semua branch</label>
+              <div class="multi-sep"></div>
+              <div id="filterBranchList"></div>
+            </div>
+          </div>
+          <div class="multi hidden" id="filterCycle">
+            <button type="button" class="multi-btn" id="filterCycleBtn">
+              <span id="filterCycleLabel">Semua cycle</span><span class="chev">&#9662;</span>
+            </button>
+            <div class="multi-menu" id="filterCycleMenu" hidden>
+              <label class="multi-opt all"><input type="checkbox" id="filterCycleAll" checked /> &#8634; Semua cycle</label>
+              <div class="multi-sep"></div>
+              <div id="filterCycleList"></div>
             </div>
           </div>
           <div class="multi hidden" id="filterPeriode">
@@ -575,7 +642,7 @@
       </section>
     </div>
 
-    <p class="credit">dimscm &middot; v64</p>
+    <p class="credit">dimscm &middot; v65</p>
   </main>
 
   <!-- Lembar cetak per salesman. Disusun saat tombol Cetak ditekan, dan hanya

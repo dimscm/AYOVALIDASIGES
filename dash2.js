@@ -154,9 +154,25 @@
     c.retur[i]  = get(ix.type).toUpperCase() === "R" ? 1 : 0;
   }
 
-  async function parseLbp(file) {
-    const store = makeStore();
-    let c = newCols(1 << 16);
+  // Menerima satu file atau beberapa sekaligus (satu per cabang). Semuanya
+  // dituang ke satu wadah: yang membedakan cabang tetap kode outletnya.
+  async function parseLbp(fileAtauDaftar) {
+    const daftar = Array.isArray(fileAtauDaftar) ? fileAtauDaftar : [fileAtauDaftar];
+    if (daftar.length > 1) {
+      // Wadah baris (store) DAN penampung kolomnya dipakai bersama, jadi file
+      // kedua dan seterusnya benar-benar menambah baris, bukan menggantikannya.
+      const store = makeStore();
+      const c = newCols(1 << 16);
+      let hasil = null;
+      for (const f of daftar) hasil = await parseLbpSatu(f, store, c);
+      return hasil;
+    }
+    return parseLbpSatu(daftar[0], null, null);
+  }
+
+  async function parseLbpSatu(file, storeLama, colsLama) {
+    const store = storeLama || makeStore();
+    let c = colsLama || newCols(1 << 16);
 
     // Jalur cepat: sumber teks → iterasi per baris, tanpa materialisasi AoA penuh.
     let text = await window.M3.readRawText(file);
@@ -705,7 +721,7 @@
   window.M3D2 = {
     async process(file, dmpIndex, dmpBySalesman) {
       window.M3.setStatus("Membaca LBP...");
-      const { store, cols, periodes } = await parseLbp(file);
+      const { store, cols, periodes } = await parseLbp(file);   // file bisa berupa daftar
       S.store = store;
       S.cols = cols;
       S.universe = null; S.universeAt = null;
