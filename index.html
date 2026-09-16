@@ -318,14 +318,16 @@
               Branch menempel pada <i>outlet</i> menurut DMP, sama seperti salesman dan rayon
               &mdash; bukan pada siapa yang kebetulan absen di situ. Dropdown ini hanya muncul kalau
               DMP-nya memang punya kolom branch.
-              Yang <b>ditampilkan namanya</b>, bukan kodenya: <i>CNS JAKUTPUS (B120)</i>, bukan
-              <i>B120</i> saja. DMP tidak punya kolom &quot;nama branch&quot; &mdash; nama yang dipakai
-              diambil dari <b>NAMASUBDIST</b>, karena itu yang dipakai sehari-hari untuk menyebut
-              cabangnya. Kodenya tetap ditulis dalam kurung: dua cabang bisa saja dinamai mirip, dan
-              yang menentukan tetap kodenya. Di Excel keduanya jadi kolom terpisah &mdash;
-              <b>Branch</b> namanya, <b>Kode Branch</b> kodenya &mdash; supaya pivot tetap
-              memakai kode sementara yang dibaca orang tetap nama. Kalau sebuah kode tidak punya
-              nama di DMP, kodenya sendiri yang ditampilkan.</p>
+              Yang <b>ditampilkan namanya</b>, bukan kodenya: <i>CNS JAKUTPUS</i>, bukan <i>B120</i>.
+              DMP tidak punya kolom &quot;nama branch&quot; &mdash; nama yang dipakai diambil dari
+              <b>NAMASUBDIST</b>, karena itu yang dipakai sehari-hari untuk menyebut cabangnya.
+              Yang menyaring di belakang layar tetap <b>KODEBRANCH</b>, jadi nama boleh diperbaiki
+              kapan saja tanpa mengubah hasil saringan. Kodenya baru ikut ditulis dalam kurung
+              kalau dua cabang ternyata bernama persis sama &mdash; tanpa itu dua barisnya tidak
+              bisa dibedakan. Di Excel keduanya jadi kolom terpisah: <b>Branch</b> namanya,
+              <b>Kode Branch</b> kodenya, supaya pivot tetap memakai kode sementara yang dibaca
+              orang tetap nama. Kalau sebuah kode tidak punya nama di DMP, kodenya sendiri yang
+              ditampilkan.</p>
             <p class="hnote"><b>Sheet &quot;Rangking Salesman&quot;</b> di Export Excel menilai mutu kerja
               lapangan dari dua hal yang memang terekam: <b>validasi radius</b> dan <b>scan barcode</b>.
               Tiap kunjungan dapat poin &mdash; <b>Flag 1 + Scan 3 poin</b> (dua-duanya terbukti),
@@ -649,7 +651,7 @@
       </section>
     </div>
 
-    <p class="credit">dimscm &middot; v66</p>
+    <p class="credit">dimscm &middot; v67</p>
   </main>
 
   <!-- Lembar cetak per salesman. Disusun saat tombol Cetak ditekan, dan hanya

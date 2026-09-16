@@ -3380,12 +3380,25 @@
     return set && set.size ? [...set].sort().join(" / ") : String(kode || "");
   }
 
-  // Untuk dropdown: namanya di depan, kodenya di belakang sebagai pemastian.
-  // Di layar kodenya masih perlu terlihat — dua cabang bisa saja dinamai mirip,
-  // dan yang menentukan tetap kodenya.
+  // Untuk dropdown: namanya saja. Kodenya tidak ikut ditulis — yang dicari mata
+  // waktu memilih cabang memang namanya, dan "(B120)" di belakangnya cuma
+  // mengembalikan hal yang tadi mau dihindari.
+  //
+  // Satu perkecualian: kalau dua KODEBRANCH ternyata bernama sama, namanya saja
+  // tidak cukup untuk membedakan — dua baris yang bunyinya persis sama di
+  // dropdown tidak bisa dipilih dengan yakin. Hanya pada kasus itu kodenya
+  // ditempelkan. Di data satu cabang hal ini tidak pernah terjadi.
+  function branchKembar(nama) {
+    if (!(state.branchNama instanceof Map)) return false;
+    let n = 0;
+    for (const kode of state.branchNama.keys()) if (namaBranch(kode) === nama) n++;
+    return n > 1;
+  }
+
   function labelBranch(kode) {
     const nama = namaBranch(kode);
-    return nama === String(kode || "") ? nama : `${nama} (${kode})`;
+    if (nama === String(kode || "")) return nama;
+    return branchKembar(nama) ? `${nama} (${kode})` : nama;
   }
 
   // Dipakai di beberapa tempat, jadi bentuknya disamakan sekali di sini.
