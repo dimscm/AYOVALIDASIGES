@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>M3 Beverage Mayora</title>
-  <link rel="stylesheet" href="styles.css?v=64" />
+  <link rel="stylesheet" href="styles.css?v=68" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23c8102e'/%3E%3Ctext x='50' y='62' font-size='34' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EM3%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -538,6 +538,14 @@
               <div class="h-item warn"><b>Grup produk</b><span>Kode barang dengan produk sama digabung. Le Minerale 600ML = 4 kode jadi 1.</span></div>
               <div class="h-item bad"><b>Daftar outlet dari DMP</b><span>Jumlah outlet per salesman mengikuti DMP. Outlet yang belum pernah transaksi sama sekali tetap dihitung dan ditandai.</span></div>
             </div>
+            <p class="hnote"><b>Saringan &quot;Semua branch&quot;</b> ada di sini juga, dan berbunyi
+              sama persis dengan yang di Validasi Kunjungan: namanya yang tertulis
+              (<i>CNS JAKUTPUS</i>), kodenya yang dipakai menyaring. Branch menempel pada
+              <b>outlet</b> menurut DMP, bukan pada salesman yang mencatat penjualannya &mdash; jadi
+              coverage per cabang dihitung dari outlet milik cabang itu. Dropdown-nya baru muncul
+              kalau DMP yang diupload memang memuat lebih dari satu cabang. Di file
+              <b>Outlet Belum Transaksi</b> branch-nya ikut jadi kolom, lengkap dengan kode dan
+              namanya.</p>
             <div class="funnel" id="d2Funnel"></div>
           </div>
         </details>
@@ -556,6 +564,16 @@
               <label class="multi-opt all"><input type="checkbox" id="d2FilterSalesmanAll" checked /> ↺ Semua salesman</label>
               <div class="multi-sep"></div>
               <div id="d2FilterSalesmanList"></div>
+            </div>
+          </div>
+          <div class="multi hidden" id="d2FilterBranch">
+            <button type="button" class="multi-btn" id="d2FilterBranchBtn">
+              <span id="d2FilterBranchLabel">Semua branch</span><span class="chev">&#9662;</span>
+            </button>
+            <div class="multi-menu" id="d2FilterBranchMenu" hidden>
+              <label class="multi-opt all"><input type="checkbox" id="d2FilterBranchAll" checked /> &#8634; Semua branch</label>
+              <div class="multi-sep"></div>
+              <div id="d2FilterBranchList"></div>
             </div>
           </div>
           <div class="multi" id="d2FilterRayon">
@@ -651,7 +669,7 @@
       </section>
     </div>
 
-    <p class="credit">dimscm &middot; v67</p>
+    <p class="credit">dimscm &middot; v68</p>
   </main>
 
   <!-- Lembar cetak per salesman. Disusun saat tombol Cetak ditekan, dan hanya
@@ -662,7 +680,7 @@
   <script src="vendor/jszip.min.js"></script>
   <script src="vendor/7zz.umd.js"></script>
   <script src="vendor/qrcode.js"></script>
-  <script src="app.js?v=64"></script>
-  <script src="dash2.js?v=64"></script>
+  <script src="app.js?v=68"></script>
+  <script src="dash2.js?v=68"></script>
 </body>
 </html>

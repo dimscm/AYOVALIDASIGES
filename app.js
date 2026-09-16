@@ -1373,6 +1373,9 @@
       // mata waktu dropdown-nya dibuka.
       const branches = [...new Set(results.map((r) => r.branchEff).filter(Boolean))]
         .sort((a, b) => labelBranch(a).localeCompare(labelBranch(b), "id", { numeric: true }));
+      // Barisnya cuma dibuat kalau memang ada yang tanpa branch, dan ditaruh
+      // paling bawah — itu sisa, bukan cabang.
+      if (branches.length && results.some((r) => !r.branchEff)) branches.push("");
       populateBranch(branches);
       const cycles = [...new Set(results.map((r) => r.cycleEff).filter(Boolean))]
         .sort((a, b) => a.localeCompare(b, "id", { numeric: true }));
@@ -3380,6 +3383,7 @@
     return set && set.size ? [...set].sort().join(" / ") : String(kode || "");
   }
 
+
   // Untuk dropdown: namanya saja. Kodenya tidak ikut ditulis — yang dicari mata
   // waktu memilih cabang memang namanya, dan "(B120)" di belakangnya cuma
   // mengembalikan hal yang tadi mau dihindari.
@@ -3395,9 +3399,16 @@
     return n > 1;
   }
 
+  // Outlet yang tidak ada di DMP tidak punya branch. Kalau dibiarkan tanpa
+  // pilihan sendiri, ia hilang begitu branch mana pun dipilih — dan memilih
+  // semua branch satu per satu tidak pernah menjumlah kembali ke totalnya.
+  // Hilang diam-diam itu yang paling susah dilacak, jadi diberi barisnya sendiri.
+  const TANPA_BRANCH = "(tanpa branch di DMP)";
+
   function labelBranch(kode) {
+    if (!kode) return TANPA_BRANCH;
     const nama = namaBranch(kode);
-    if (nama === String(kode || "")) return nama;
+    if (nama === String(kode)) return nama;
     return branchKembar(nama) ? `${nama} (${kode})` : nama;
   }
 
@@ -3896,6 +3907,10 @@
     getDmpIndex: () => state.dmpIndex,
     getDmpBySalesman: () => state.dmpBySalesman || new Map(),
     getDmpStats: () => state.dmpStats || null,
+    // Dipakai Dashboard 2 supaya kedua dashboard menyebut cabang dengan
+    // sebutan yang sama persis.
+    namaBranch,
+    labelBranch,
     // Dipakai untuk memeriksa hasil hitungan dari luar (uji otomatis dan
     // console) — bukan bagian dari tampilan, jadi tidak ada yang berubah
     // kalau isinya dibaca.

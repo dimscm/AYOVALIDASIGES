@@ -217,6 +217,7 @@
     const pds = new Set([...document.querySelectorAll(".d2PeriodeItem")].filter((c) => c.checked).map((c) => c.value));
 
     const rys = new Set([...document.querySelectorAll(".d2RayonItem")].filter((c) => c.checked).map((c) => c.value));
+    const brs = new Set([...document.querySelectorAll(".d2BranchItem")].filter((c) => c.checked).map((c) => c.value));
     const c = S.cols, st = S.store;
     if (!c) { S.outlets = new Map(); S.groups = new Map(); S.totalOutlet = 0; return; }
     const L = st.list;
@@ -229,6 +230,9 @@
     // coverage — termasuk outlet yang belum pernah transaksi sama sekali.
     const outlets = new Map();
     for (const u of uni) {
+      // Branch menempel pada outletnya, bukan pada penugasan salesman/rayon,
+      // jadi diuji sendiri di luar outletLolos.
+      if (brs.size && !brs.has(u.branch)) continue;
       if (!outletLolos(u, sms, rys)) continue;
       outlets.set(u.id, { ...u, groups: new Set(), karton: 0, amount: 0 });
     }
@@ -313,6 +317,7 @@
           nama: (d && d.namaOutlet) || "",
           salesman: (d && d.salesman) || sls,
           rayon: (d && d.rayon) || "",
+          branch: (d && d.branch) || "",
           alt: (d && d.alt) || null,
           diDmp: true,
           dariDaftarDmp: true,   // masuk lewat daftar resmi salesman di DMP
@@ -338,6 +343,7 @@
         nama: (d && d.namaOutlet) || st.outletNama[oi] || "",
         salesman,
         rayon: (d && d.rayon) || "",
+        branch: (d && d.branch) || "",
         alt: (d && d.alt) || null,
         diDmp: !!d,
       });
@@ -607,10 +613,13 @@
     return { updateLabel, items };
   }
 
-  function fillList(listId, values, itemClass, ctrl, onChange) {
+  // teksDari: kalau yang dibaca orang berbeda dengan yang disimpan — seperti
+  // branch, yang disaring pakai kodenya tapi ditulis pakai namanya.
+  function fillList(listId, values, itemClass, ctrl, onChange, teksDari) {
     $(listId).innerHTML = values.map((v) => {
       const safe = window.M3.escapeHtml(v);
-      return `<label class="multi-opt" data-name="${safe.toLowerCase()}"><input type="checkbox" value="${safe}" class="${itemClass}" /> ${safe}</label>`;
+      const teks = window.M3.escapeHtml(teksDari ? teksDari(v) : v);
+      return `<label class="multi-opt" data-name="${teks.toLowerCase()}"><input type="checkbox" value="${safe}" class="${itemClass}" /> ${teks}</label>`;
     }).join("");
     $(listId).querySelectorAll("." + itemClass).forEach((c) =>
       c.addEventListener("change", () => { ctrl.updateLabel(); onChange(); })
@@ -636,12 +645,14 @@
       "d2FilterSalesmanAll", "d2SalesmanItem", "d2FilterSalesmanLabel", "salesman", refresh);
     const ryCtrl = wireMulti("d2FilterRayon", "d2FilterRayonBtn", "d2FilterRayonMenu",
       "d2FilterRayonAll", "d2RayonItem", "d2FilterRayonLabel", "rayon", refresh);
+    const brCtrl = wireMulti("d2FilterBranch", "d2FilterBranchBtn", "d2FilterBranchMenu",
+      "d2FilterBranchAll", "d2BranchItem", "d2FilterBranchLabel", "branch", refresh);
     const pdCtrl = wireMulti("d2FilterPeriode", "d2FilterPeriodeBtn", "d2FilterPeriodeMenu",
       "d2FilterPeriodeAll", "d2PeriodeItem", "d2FilterPeriodeLabel", "periode", refresh);
     const prCtrl = wireMulti("d2FilterProduk", "d2FilterProdukBtn", "d2FilterProdukMenu",
       "d2FilterProdukAll", "d2ProdukItem", "d2FilterProdukLabel", "produk",
       () => { computeGap(); renderGap(); });
-    S.ctrls = { smCtrl, ryCtrl, pdCtrl, prCtrl };
+    S.ctrls = { smCtrl, ryCtrl, brCtrl, pdCtrl, prCtrl };
 
     $("d2FilterSalesmanSearch").addEventListener("input", (e) => {
       const q = e.target.value.trim().toLowerCase();
@@ -704,6 +715,8 @@
         "Nama Outlet": o.nama,
         Salesman: o.salesman,
         Rayon: o.rayon,
+        Branch: o.branch ? window.M3.namaBranch(o.branch) : "",
+        "Kode Branch": o.branch || "",
         Status: o.groups.size ? "Ada transaksi" : "Belum transaksi apa pun",
         "Jumlah Produk Belum Dibeli": o.missing.length,
         "Produk Belum Dibeli": o.missing.join(", "),
@@ -749,6 +762,19 @@
       const rayons = [...rySet].sort();
       fillList("d2FilterSalesmanList", salesmen, "d2SalesmanItem", S.ctrls.smCtrl, refresh);
       fillList("d2FilterRayonList", rayons, "d2RayonItem", S.ctrls.ryCtrl, refresh);
+      // Branch: yang disimpan kodenya, yang ditulis namanya — sama seperti di
+      // Validasi Kunjungan, supaya dua dashboard menyebut cabang dengan sebutan
+      // yang sama persis. Disembunyikan kalau datanya cuma satu cabang.
+      const branches = [...new Set(S.universe.map((o) => o.branch).filter(Boolean))]
+        .sort((a, b) => window.M3.labelBranch(a).localeCompare(window.M3.labelBranch(b), "id", { numeric: true }));
+      // Outlet yang bertransaksi tapi tidak ada di DMP tidak punya branch.
+      // Diberi barisnya sendiri di paling bawah supaya tidak lenyap diam-diam
+      // begitu branch mana pun dipilih — memilih semua barisnya harus kembali
+      // menjumlah ke total outlet.
+      if (branches.length && S.universe.some((o) => !o.branch)) branches.push("");
+      fillList("d2FilterBranchList", branches, "d2BranchItem", S.ctrls.brCtrl, refresh,
+        window.M3.labelBranch);
+      $("d2FilterBranch").classList.toggle("hidden", branches.length < 2);
       fillList("d2FilterPeriodeList", periodes, "d2PeriodeItem", S.ctrls.pdCtrl, refresh);
       fillList("d2FilterProdukList", S.allGroups.slice().sort(), "d2ProdukItem", S.ctrls.prCtrl,
         () => { computeGap(); renderGap(); });
@@ -768,8 +794,17 @@
       S.coverageRows = []; S.gapRows = []; S.gapPage = 1; S.totalOutlet = 0;
       const rs = $("d2ResultSection");
       if (rs) rs.classList.add("hidden");
+      // Saringan branch ikut dikosongkan dan disembunyikan lagi: isinya datang
+      // dari DMP yang baru saja dibuang, dan centang yang tertinggal akan
+      // menyaring data berikutnya diam-diam.
+      document.querySelectorAll(".d2BranchItem").forEach((c) => (c.checked = false));
+      const bl = $("d2FilterBranchList"); if (bl) bl.innerHTML = "";
+      const ba = $("d2FilterBranchAll"); if (ba) ba.checked = true;
+      const blab = $("d2FilterBranchLabel"); if (blab) blab.textContent = "Semua branch";
+      const bw = $("d2FilterBranch"); if (bw) bw.classList.add("hidden");
     },
     // exposed for tests
+    _universe: () => S.universe,
     _normalizeProduct: normalizeProduct,
     _parseIsi: parseIsi,
   };
