@@ -1179,7 +1179,8 @@
     const catLabel = $("filterCategoryLabel"); if (catLabel) catLabel.textContent = "Semua kategori";
     const smAll = $("filterSalesmanAll"); if (smAll) smAll.checked = true;
     const smLabel = $("filterSalesmanLabel"); if (smLabel) smLabel.textContent = "Semua salesman";
-    const sSearch = $("filterSalesmanSearch"); if (sSearch) sSearch.value = "";
+    const sSearch = $("filterSalesmanSearch");
+    if (sSearch) { sSearch.value = ""; sSearch.dispatchEvent(new Event("input")); }
     document.querySelectorAll(".filterPeriodeItem").forEach((c) => (c.checked = false));
     const pdAll = $("filterPeriodeAll"); if (pdAll) pdAll.checked = true;
     const pdLabel = $("filterPeriodeLabel"); if (pdLabel) pdLabel.textContent = "Semua periode";
@@ -1903,6 +1904,8 @@
     ["filterCategoryAll", "filterSalesmanAll", "filterRayonAll", "filterPeriodeAll",
      "filterBranchAll", "filterCycleAll"]
       .forEach((id) => { if ($(id)) $(id).checked = true; });
+    const cariSls = $("filterSalesmanSearch");
+    if (cariSls) { cariSls.value = ""; cariSls.dispatchEvent(new Event("input")); }
     if (catCtrl) catCtrl.updateLabel();
     if (smCtrl) smCtrl.updateLabel();
     if (ryCtrl) ryCtrl.updateLabel();
@@ -2168,15 +2171,83 @@
       c.addEventListener("change", () => { smCtrl.updateLabel(); applyFilters(); });
     });
     smCtrl.updateLabel();
+    if (segarkanAksiSalesman) segarkanAksiSalesman();
   }
 
   // in-menu search for salesman
-  $("filterSalesmanSearch").addEventListener("input", (e) => {
-    const q = e.target.value.trim().toLowerCase();
-    $("filterSalesmanList").querySelectorAll(".multi-opt").forEach((el) => {
-      el.style.display = !q || el.getAttribute("data-name").includes(q) ? "" : "none";
+  // Kotak cari di dalam dropdown salesman. Selain menyaring daftarnya, ia bisa
+  // MEMILIH sekaligus semua yang cocok: mengetik "M3" lalu Enter mencentang
+  // seluruh salesman M3. Tanpa itu, memilih satu tim berarti mencentang puluhan
+  // baris satu per satu — di file empat cabang daftarnya 368 orang, dan yang
+  // terjadi bukan kerja teliti, tapi kerja yang dilewati.
+  //
+  // Mengetik SENDIRI tidak langsung memilih. Kotak yang sama dipakai untuk
+  // mencari satu orang lalu mencentang dia saja, dan kalau tiap huruf mengubah
+  // pilihan, kebiasaan itu hilang — mengetik "m" akan mencentang ratusan orang
+  // sebelum huruf kedua sempat diketik. Jadi memilihnya satu tekan: Enter, atau
+  // tombol yang muncul tepat di bawah kotaknya, lengkap dengan jumlahnya.
+  function wirePencarianSalesman(searchId, listId, itemClass, aksiId, pilihId, hapusId,
+                                 ctrl, onChange) {
+    const cari = $(searchId);
+    if (!cari) return;
+    const kotak = () => [...$(listId).querySelectorAll(".multi-opt")];
+    const cocok = () => {
+      const q = cari.value.trim().toLowerCase();
+      if (!q) return [];
+      return kotak().filter((el) => (el.getAttribute("data-name") || "").includes(q));
+    };
+
+    function segarkanAksi() {
+      const ada = cocok();
+      const c = ada.map((el) => el.querySelector("." + itemClass)).filter(Boolean);
+      const belum = c.filter((x) => !x.checked).length;
+      const sudah = c.length - belum;
+      const aksi = $(aksiId), pilih = $(pilihId), hapus = $(hapusId);
+      if (!aksi) return;
+      aksi.classList.toggle("hidden", !c.length);
+      if (!c.length) return;
+      pilih.classList.toggle("hidden", !belum);
+      pilih.textContent = `✓ Pilih ${belum.toLocaleString("id-ID")} yang cocok`;
+      hapus.classList.toggle("hidden", !sudah);
+      hapus.textContent = `Hapus ${sudah.toLocaleString("id-ID")} pilihan`;
+    }
+
+    function ubah(jadi) {
+      const c = cocok().map((el) => el.querySelector("." + itemClass)).filter(Boolean);
+      if (!c.length) return;
+      c.forEach((x) => { x.checked = jadi; });
+      ctrl().updateLabel();
+      segarkanAksi();
+      onChange();
+    }
+
+    cari.addEventListener("input", () => {
+      const q = cari.value.trim().toLowerCase();
+      kotak().forEach((el) => {
+        el.style.display = !q || (el.getAttribute("data-name") || "").includes(q) ? "" : "none";
+      });
+      segarkanAksi();
     });
-  });
+    cari.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      // Kotak ini di dalam <form>? Bukan — tapi Enter di input type=search juga
+      // memicu "cari" bawaan browser yang mengosongkan kotaknya di sebagian HP.
+      e.preventDefault();
+      ubah(true);
+    });
+    // Tombolnya di dalam menu dropdown; kliknya tidak boleh ikut menutup menu.
+    for (const [id, jadi] of [[pilihId, true], [hapusId, false]]) {
+      if (!$(id)) continue;
+      $(id).addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); ubah(jadi); });
+    }
+    // Dipanggil lagi dari luar waktu daftarnya baru diisi ulang.
+    return segarkanAksi;
+  }
+
+  const segarkanAksiSalesman = wirePencarianSalesman(
+    "filterSalesmanSearch", "filterSalesmanList", "filterSalesmanItem",
+    "filterSalesmanAksi", "filterSalesmanPilih", "filterSalesmanHapus",
+    () => smCtrl, applyFilters);
   if ($("filterTitik")) $("filterTitik").addEventListener("change", applyFilters);
   if ($("filterBarcode")) $("filterBarcode").addEventListener("change", applyFilters);
   if ($("filterPeriodeHht")) $("filterPeriodeHht").addEventListener("change", applyFilters);
@@ -4012,6 +4083,9 @@
     // sebutan yang sama persis.
     namaBranch,
     labelBranch,
+    // Kotak cari yang bisa memilih sekaligus semua yang cocok. Dipakai dua
+    // dashboard supaya cara kerjanya sama di dua-duanya.
+    wirePencarianSalesman,
     // Dipakai untuk memeriksa hasil hitungan dari luar (uji otomatis dan
     // console) — bukan bagian dari tampilan, jadi tidak ada yang berubah
     // kalau isinya dibaca.

@@ -654,12 +654,12 @@
       () => { computeGap(); renderGap(); });
     S.ctrls = { smCtrl, ryCtrl, brCtrl, pdCtrl, prCtrl };
 
-    $("d2FilterSalesmanSearch").addEventListener("input", (e) => {
-      const q = e.target.value.trim().toLowerCase();
-      $("d2FilterSalesmanList").querySelectorAll(".multi-opt").forEach((el) => {
-        el.style.display = !q || el.getAttribute("data-name").includes(q) ? "" : "none";
-      });
-    });
+    // Kotak cari salesman: sama persis dengan yang di Validasi Kunjungan —
+    // ketik "M3" lalu Enter untuk mencentang seluruh salesman M3 sekaligus.
+    S.segarkanAksiSls = window.M3.wirePencarianSalesman(
+      "d2FilterSalesmanSearch", "d2FilterSalesmanList", "d2SalesmanItem",
+      "d2FilterSalesmanAksi", "d2FilterSalesmanPilih", "d2FilterSalesmanHapus",
+      () => S.ctrls.smCtrl, refresh);
     $("d2FilterProdukSearch").addEventListener("input", (e) => {
       const q = e.target.value.trim().toLowerCase();
       $("d2FilterProdukList").querySelectorAll(".multi-opt").forEach((el) => {
@@ -761,6 +761,7 @@
       const salesmen = [...smSet].sort();
       const rayons = [...rySet].sort();
       fillList("d2FilterSalesmanList", salesmen, "d2SalesmanItem", S.ctrls.smCtrl, refresh);
+      if (S.segarkanAksiSls) S.segarkanAksiSls();
       fillList("d2FilterRayonList", rayons, "d2RayonItem", S.ctrls.ryCtrl, refresh);
       // Branch: yang disimpan kodenya, yang ditulis namanya — sama seperti di
       // Validasi Kunjungan, supaya dua dashboard menyebut cabang dengan sebutan

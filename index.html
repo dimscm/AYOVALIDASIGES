@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>M3 Beverage Mayora</title>
-  <link rel="stylesheet" href="styles.css?v=70" />
+  <link rel="stylesheet" href="styles.css?v=71" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23c8102e'/%3E%3Ctext x='50' y='62' font-size='34' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EM3%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -150,6 +150,14 @@
               <b>Salesman</b> memang berisi yang <i>berkunjung</i> — bedanya dengan pemilik justru
               temuan. Kalau yang dicari "apa saja yang dikerjakan si A", ketik namanya di
               <b>kotak pencarian</b>: nama pengunjung ikut dicari di situ.
+              <b>Memilih satu tim sekaligus:</b> buka dropdown salesman, ketik awalan kodenya
+              &mdash; <i>M3</i>, <i>KVTO</i>, <i>CWC</i> &mdash; lalu tekan <b>Enter</b>, atau tekan
+              tombol hijau yang muncul (<i>"Pilih 46 yang cocok"</i>). Seluruh salesman yang cocok
+              tercentang sekali jalan, dan tabel, lembar cetak, Excel, maupun rangking langsung
+              ikut. Di daftar 368 orang, mencentangnya satu per satu bukan kerja teliti &mdash; itu
+              kerja yang akhirnya dilewati. Mengetik saja belum memilih apa-apa: kotak yang sama
+              masih dipakai untuk mencari satu orang lalu mencentang dia saja. Untuk membatalkan,
+              tekan <b>"Hapus N pilihan"</b> di sebelahnya. Kotak yang sama ada di Coverage Produk.
               Di sheet <b>Usulan Titik</b> dan <b>Barcode Perlu Dicek</b> kolomnya sekarang dipisah
               jelas: <b>Salesman (DMP)</b> pemiliknya, <b>Dikunjungi Oleh</b> yang absen.</p>
             <p class="hnote"><b>Daftar kerja hanya memuat masalah yang MASIH BERJALAN.</b>
@@ -423,7 +431,11 @@
               <span id="filterSalesmanLabel">Semua salesman</span><span class="chev">▾</span>
             </button>
             <div class="multi-menu wide" id="filterSalesmanMenu" hidden>
-              <input type="search" id="filterSalesmanSearch" class="multi-search" placeholder="Cari salesman..." />
+              <input type="search" id="filterSalesmanSearch" class="multi-search" placeholder="Ketik M3, KVTO, nama... lalu Enter" />
+              <div class="multi-aksi hidden" id="filterSalesmanAksi">
+                <button type="button" class="multi-pilih" id="filterSalesmanPilih"></button>
+                <button type="button" class="multi-pilih batal hidden" id="filterSalesmanHapus"></button>
+              </div>
               <label class="multi-opt all"><input type="checkbox" id="filterSalesmanAll" checked /> ↺ Semua salesman</label>
               <div class="multi-sep"></div>
               <div id="filterSalesmanList"></div>
@@ -590,7 +602,11 @@
               <span id="d2FilterSalesmanLabel">Semua salesman</span><span class="chev">▾</span>
             </button>
             <div class="multi-menu wide" id="d2FilterSalesmanMenu" hidden>
-              <input type="search" id="d2FilterSalesmanSearch" class="multi-search" placeholder="Cari salesman..." />
+              <input type="search" id="d2FilterSalesmanSearch" class="multi-search" placeholder="Ketik M3, KVTO, nama... lalu Enter" />
+              <div class="multi-aksi hidden" id="d2FilterSalesmanAksi">
+                <button type="button" class="multi-pilih" id="d2FilterSalesmanPilih"></button>
+                <button type="button" class="multi-pilih batal hidden" id="d2FilterSalesmanHapus"></button>
+              </div>
               <label class="multi-opt all"><input type="checkbox" id="d2FilterSalesmanAll" checked /> ↺ Semua salesman</label>
               <div class="multi-sep"></div>
               <div id="d2FilterSalesmanList"></div>
@@ -699,7 +715,7 @@
       </section>
     </div>
 
-    <p class="credit">dimscm &middot; v70</p>
+    <p class="credit">dimscm &middot; v71</p>
   </main>
 
   <!-- Lembar cetak per salesman. Disusun saat tombol Cetak ditekan, dan hanya
@@ -710,7 +726,7 @@
   <script src="vendor/jszip.min.js"></script>
   <script src="vendor/7zz.umd.js"></script>
   <script src="vendor/qrcode.js"></script>
-  <script src="app.js?v=70"></script>
-  <script src="dash2.js?v=70"></script>
+  <script src="app.js?v=71"></script>
+  <script src="dash2.js?v=71"></script>
 </body>
 </html>
