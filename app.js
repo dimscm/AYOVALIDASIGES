@@ -933,6 +933,13 @@
     // baru tapi state.dmpStats masih menyimpan angka proses sebelumnya — kalau
     // itu ikut dijumlahkan, jumlah outletnya berlipat tiap kali ditekan.
     const stLama = (idx.size && state.dmpStats) || null;
+    // Nama cabang dikumpulkan sendiri, di luar indeks outlet. DMP tidak punya
+    // kolom NAMABRANCH — yang ada NAMASUBDIST, dan itu memang nama yang dipakai
+    // sehari-hari ("CNS JAKUTPUS"), sementara KODEBRANCH cuma "B120". Satu kode
+    // bisa saja bertemu lebih dari satu nama kalau cabangnya mengirim file
+    // dengan penamaan berbeda, jadi yang disimpan kumpulan, bukan satu nilai.
+    if (!idx.size || !(state.branchNama instanceof Map)) state.branchNama = new Map();
+    const namaCabang = state.branchNama;
     let count = 0, aktif = 0, ganda = 0;
     for (let r = 1; r < rows.length; r++) {
       const row = rows[r] || [];
@@ -966,6 +973,13 @@
       // 102.574 outlet seperti ini: tanpa salesman, tanpa rayon. Outlet mati tidak
       // pantas jadi penyebut coverage, tapi tetap disimpan supaya kalau ternyata
       // ada transaksinya bisa ketahuan.
+      const br = iBranch === undefined ? "" : cell(row, iBranch);
+      const sub = iSubdist === undefined ? "" : cell(row, iSubdist);
+      if (br && sub) {
+        let set = namaCabang.get(br);
+        if (!set) { set = new Set(); namaCabang.set(br, set); }
+        set.add(sub);
+      }
       const stat = cell(row, iStatus).toUpperCase();
       const statReg = cell(row, iStatusReg).toUpperCase();
       const isAktif = iStatus < 0 && iStatusReg < 0
@@ -977,8 +991,8 @@
         salesman: sls,
         rayon: ryRow,
         cycle: cell(row, iCycle),
-        branch: iBranch === undefined ? "" : cell(row, iBranch),
-        subdist: iSubdist === undefined ? "" : cell(row, iSubdist),
+        branch: br,
+        subdist: sub,
         // Status hidup/mati disimpan per outlet, bukan cuma dihitung: daftar
         // "semua outlet" tidak boleh memuat 100rb outlet mati.
         aktif: isAktif,
@@ -1355,7 +1369,10 @@
       // Branch dan Cycle ikut jadi penyaring. Branch baru berguna kalau beberapa
       // cabang diupload sekaligus, jadi penyaringnya disembunyikan kalau cuma
       // ada satu — daripada memajang dropdown yang isinya satu pilihan.
-      const branches = [...new Set(results.map((r) => r.branchEff).filter(Boolean))].sort();
+      // Diurutkan menurut nama yang terbaca, bukan kodenya — itu yang dicari
+      // mata waktu dropdown-nya dibuka.
+      const branches = [...new Set(results.map((r) => r.branchEff).filter(Boolean))]
+        .sort((a, b) => labelBranch(a).localeCompare(labelBranch(b), "id", { numeric: true }));
       populateBranch(branches);
       const cycles = [...new Set(results.map((r) => r.cycleEff).filter(Boolean))]
         .sort((a, b) => a.localeCompare(b, "id", { numeric: true }));
@@ -1990,12 +2007,16 @@
   // jadi ditulis sekali: daftar nilai -> daftar <label>, lalu dipasangi pemicu.
   // Penyaring yang isinya kurang dari dua pilihan disembunyikan — dropdown
   // berisi satu pilihan cuma memenuhi layar tanpa bisa menyaring apa pun.
+  // names boleh berupa daftar teks biasa, atau daftar { nilai, label } kalau
+  // yang disimpan berbeda dengan yang dibaca orang — seperti branch, yang
+  // disaring pakai kodenya tapi ditampilkan pakai namanya.
   function isiFilter(listId, kelas, ctrl, wadahId, names) {
     const list = $(listId);
     if (!list) return;
     list.innerHTML = names.map((n) => {
-      const safe = escapeHtml(n);
-      return `<label class="multi-opt"><input type="checkbox" value="${safe}" class="${kelas}" /> ${safe}</label>`;
+      const nilai = escapeHtml(typeof n === "string" ? n : n.nilai);
+      const teks = escapeHtml(typeof n === "string" ? n : n.label);
+      return `<label class="multi-opt"><input type="checkbox" value="${nilai}" class="${kelas}" /> ${teks}</label>`;
     }).join("");
     list.querySelectorAll("." + kelas).forEach((c) => {
       c.addEventListener("change", () => { ctrl.updateLabel(); applyFilters(); });
@@ -2004,8 +2025,9 @@
     if ($(wadahId)) $(wadahId).classList.toggle("hidden", names.length < 2);
   }
 
-  const populateBranch = (names) =>
-    isiFilter("filterBranchList", "filterBranchItem", brCtrl, "filterBranch", names);
+  const populateBranch = (kodes) =>
+    isiFilter("filterBranchList", "filterBranchItem", brCtrl, "filterBranch",
+      kodes.map((k) => ({ nilai: k, label: labelBranch(k) })));
   const populateCycle = (names) =>
     isiFilter("filterCycleList", "filterCycleItem", cyCtrl, "filterCycle", names);
 
@@ -2086,7 +2108,8 @@
     "Alor Reason", "Saran", "Barcode", "Kunjungan Discan", "Alasan Terakhir",
     "Titik Toko", "Lat Usulan", "Long Usulan", "Keyakinan Usulan", "Catatan Usulan",
     "Total Kunjungan Outlet", "Total Di Luar Radius", "Salesman Pernah Berkunjung",
-    "Branch", "Kunjungan Tiap (hari)", "Cycle Seharusnya (hari)", "Selisih Cycle (hari)"];
+    "Branch", "Kode Branch",
+    "Kunjungan Tiap (hari)", "Cycle Seharusnya (hari)", "Selisih Cycle (hari)"];
 
   const TITIK_TEKS = {
     USUL: "Perlu diperbaiki",
@@ -2138,7 +2161,7 @@
       adaUsulan ? koordTeks(u.mLat) : "", adaUsulan ? koordTeks(u.mLon) : "",
       adaUsulan ? u.yakin : "", u ? catatanUsulan(u) : "",
       g.n, g.luar, [...g.sls].join("; "),
-      r.branchEff || "",
+      r.branchEff ? namaBranch(r.branchEff) : "", r.branchEff || "",
       fr.hari ?? "", tgtCycle ?? "",
       (fr.hari !== null && fr.hari !== undefined && tgtCycle) ? fr.hari - tgtCycle : "",
     ];
@@ -2270,7 +2293,8 @@
         nilai: Math.round((rata / POIN_MAX) * 1000) / 10,   // 0-100
         outlet: v.outlet.size,
         rayon: [...v.rayon].sort().join(", "),
-        branch: [...v.branch].sort().join(", "),
+        branch: [...v.branch].map(namaBranch).sort().join(", "),
+        kodeBranch: [...v.branch].sort().join(", "),
         kat: v.kat,
       };
     });
@@ -2295,6 +2319,7 @@
       Salesman: x.nama,
       Catatan: x.catatan || "",
       Branch: x.branch,
+      "Kode Branch": x.kodeBranch,
       Rayon: x.rayon,
       "Nilai (0-100)": x.nilai,
       "Rata-rata Poin": Math.round(x.rata * 100) / 100,
@@ -2366,7 +2391,8 @@
         "Nama Toko": d.namaOutlet || "",
         "Salesman (DMP)": d.salesman || "",
         "Rayon (DMP)": d.rayon || "",
-        Branch: d.branch || "",
+        Branch: d.branch ? namaBranch(d.branch) : "",
+        "Kode Branch": d.branch || "",
         Cycle: d.cycle || "",
         "Kunjungan Tiap (hari)": fr.hari ?? "",
         "Cycle Seharusnya (hari)": tgtCycle ?? "",
@@ -3342,6 +3368,25 @@
 
   const frekOutlet = (custno) =>
     (state.frekByOutlet && state.frekByOutlet.get(custno)) || { hari: null, n: 0 };
+
+  // ---- Nama cabang ----
+  // Yang dipakai sebagai identitas tetap KODEBRANCH: itu yang menempel di tiap
+  // outlet dan tidak berubah. Yang ditampilkan namanya, karena "CNS JAKUTPUS"
+  // bisa dibaca orang sedangkan "B120" harus dihafal dulu. Kalau kodenya tidak
+  // punya nama di DMP, kodenya sendiri yang dipakai — lebih baik daripada sel
+  // kosong.
+  function namaBranch(kode) {
+    const set = state.branchNama && state.branchNama.get(kode);
+    return set && set.size ? [...set].sort().join(" / ") : String(kode || "");
+  }
+
+  // Untuk dropdown: namanya di depan, kodenya di belakang sebagai pemastian.
+  // Di layar kodenya masih perlu terlihat — dua cabang bisa saja dinamai mirip,
+  // dan yang menentukan tetap kodenya.
+  function labelBranch(kode) {
+    const nama = namaBranch(kode);
+    return nama === String(kode || "") ? nama : `${nama} (${kode})`;
+  }
 
   // Dipakai di beberapa tempat, jadi bentuknya disamakan sekali di sini.
   const globalOutlet = (custno) =>

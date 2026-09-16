@@ -317,8 +317,15 @@
               jadi setelah beberapa cabang digabung, tiap cabang masih bisa dilihat sendiri-sendiri.
               Branch menempel pada <i>outlet</i> menurut DMP, sama seperti salesman dan rayon
               &mdash; bukan pada siapa yang kebetulan absen di situ. Dropdown ini hanya muncul kalau
-              DMP-nya memang punya kolom branch, dan seperti saringan lain, angka di dalam
-              kurung ikut mengecil mengikuti saringan yang sedang aktif.</p>
+              DMP-nya memang punya kolom branch.
+              Yang <b>ditampilkan namanya</b>, bukan kodenya: <i>CNS JAKUTPUS (B120)</i>, bukan
+              <i>B120</i> saja. DMP tidak punya kolom &quot;nama branch&quot; &mdash; nama yang dipakai
+              diambil dari <b>NAMASUBDIST</b>, karena itu yang dipakai sehari-hari untuk menyebut
+              cabangnya. Kodenya tetap ditulis dalam kurung: dua cabang bisa saja dinamai mirip, dan
+              yang menentukan tetap kodenya. Di Excel keduanya jadi kolom terpisah &mdash;
+              <b>Branch</b> namanya, <b>Kode Branch</b> kodenya &mdash; supaya pivot tetap
+              memakai kode sementara yang dibaca orang tetap nama. Kalau sebuah kode tidak punya
+              nama di DMP, kodenya sendiri yang ditampilkan.</p>
             <p class="hnote"><b>Sheet &quot;Rangking Salesman&quot;</b> di Export Excel menilai mutu kerja
               lapangan dari dua hal yang memang terekam: <b>validasi radius</b> dan <b>scan barcode</b>.
               Tiap kunjungan dapat poin &mdash; <b>Flag 1 + Scan 3 poin</b> (dua-duanya terbukti),
@@ -642,7 +649,7 @@
       </section>
     </div>
 
-    <p class="credit">dimscm &middot; v65</p>
+    <p class="credit">dimscm &middot; v66</p>
   </main>
 
   <!-- Lembar cetak per salesman. Disusun saat tombol Cetak ditekan, dan hanya
