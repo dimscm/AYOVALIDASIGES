@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>M3 Beverage Mayora</title>
-  <link rel="stylesheet" href="styles.css?v=68" />
+  <link rel="stylesheet" href="styles.css?v=69" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23c8102e'/%3E%3Ctext x='50' y='62' font-size='34' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EM3%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -33,8 +33,9 @@
           <span class="fmain">
             <b>EDI Flag Radius</b>
             <i class="ftag">Validasi kunjungan</i>
-            <span class="fhint">Boleh pilih beberapa file sekaligus &mdash; misalnya satu file per cabang</span>
+            <span class="fhint">Boleh beberapa file &mdash; satu per cabang. Tekan Pilih berkali-kali untuk menambah</span>
             <span class="fname" id="ediName">Belum dipilih</span>
+            <button type="button" class="fclear hidden" id="ediClear">Kosongkan</button>
           </span>
           <span class="fbtn">Pilih</span>
         </label>
@@ -45,8 +46,9 @@
           <span class="fmain">
             <b>HHT / Scan</b>
             <i class="ftag">Validasi kunjungan</i>
-            <span class="fhint">Excel, CSV, atau PDF &mdash; boleh pilih beberapa file sekaligus</span>
+            <span class="fhint">Excel, CSV, atau PDF &mdash; boleh beberapa file, tekan Pilih berkali-kali untuk menambah</span>
             <span class="fname" id="hhtName">Belum dipilih</span>
+            <button type="button" class="fclear hidden" id="hhtClear">Kosongkan</button>
           </span>
           <span class="fbtn">Pilih</span>
         </label>
@@ -57,8 +59,9 @@
           <span class="fmain">
             <b>Master Data DMP</b>
             <i class="ftag both">Keduanya</i>
-            <span class="fhint">Boleh pilih beberapa file sekaligus &mdash; misalnya satu file per cabang</span>
+            <span class="fhint">Boleh beberapa file &mdash; satu per cabang. Tekan Pilih berkali-kali untuk menambah</span>
             <span class="fname" id="dmpName">Belum dipilih</span>
+            <button type="button" class="fclear hidden" id="dmpClear">Kosongkan</button>
           </span>
           <span class="fbtn">Pilih</span>
         </label>
@@ -69,7 +72,9 @@
           <span class="fmain">
             <b>LBP &mdash; Laporan Penjualan</b>
             <i class="ftag two">Coverage produk</i>
+            <span class="fhint">Boleh beberapa file &mdash; satu per cabang. Tekan Pilih berkali-kali untuk menambah</span>
             <span class="fname" id="lbpName">Belum dipilih</span>
+            <button type="button" class="fclear hidden" id="lbpClear">Kosongkan</button>
           </span>
           <span class="fbtn">Pilih</span>
         </label>
@@ -310,7 +315,12 @@
               kumpulan data, dan judul kolom tiap file dibaca sendiri-sendiri, jadi cabang yang
               menulis judul kolomnya sedikit berbeda tetap terbaca. Yang digabung hanya file sejenis
               (EDI dengan EDI, DMP dengan DMP), dan outlet yang sama muncul di dua file DMP tidak
-              dihitung dua kali. Peringatan &quot;HHT tidak bertemu EDI&quot; tetap berlaku: kalau tidak ada
+              dihitung dua kali.
+              <b>Tidak harus sekali pilih.</b> Banyak file picker di HP cuma memperbolehkan satu
+              file per kali, jadi tekan <b>Pilih</b> berkali-kali &mdash; tiap file yang dipilih
+              <i>ditambahkan</i> ke daftar, bukan menimpa yang sebelumnya. File yang sama dipilih
+              dua kali tidak dihitung dua kali. Kalau ada yang salah pilih, tekan
+              <b>Kosongkan</b> di baris itu; slot yang lain tidak ikut terhapus. Peringatan &quot;HHT tidak bertemu EDI&quot; tetap berlaku: kalau tidak ada
               satu pun outlet yang beririsan, berarti filenya memang dari cabang yang berbeda dan
               sisi barcodenya tidak bisa dinilai.</p>
             <p class="hnote"><b>Saringan &quot;Semua branch&quot;</b> membaca kolom <b>KODEBRANCH</b> di DMP,
@@ -669,7 +679,7 @@
       </section>
     </div>
 
-    <p class="credit">dimscm &middot; v68</p>
+    <p class="credit">dimscm &middot; v69</p>
   </main>
 
   <!-- Lembar cetak per salesman. Disusun saat tombol Cetak ditekan, dan hanya
@@ -680,7 +690,7 @@
   <script src="vendor/jszip.min.js"></script>
   <script src="vendor/7zz.umd.js"></script>
   <script src="vendor/qrcode.js"></script>
-  <script src="app.js?v=68"></script>
-  <script src="dash2.js?v=68"></script>
+  <script src="app.js?v=69"></script>
+  <script src="dash2.js?v=69"></script>
 </body>
 </html>

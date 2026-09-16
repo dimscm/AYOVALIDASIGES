@@ -1066,36 +1066,72 @@
   // ada yang bisa tertukar. state[kunci] tetap berisi file PERTAMA supaya
   // seluruh pemeriksaan "ada file atau tidak" yang sudah ada tetap berlaku,
   // sedangkan daftar lengkapnya di state[kunci + "s"].
-  function wireFile(inputId, stateKey, nameId, rowId) {
+  function wireFile(inputId, stateKey, nameId, rowId, clearId) {
+    const row = () => $(rowId);
+
+    // Menggambar ulang keterangan satu slot dari daftar yang tersimpan.
+    function segarkan(kosong) {
+      const pakai = state[stateKey + "s"] || [];
+      state[stateKey] = pakai[0] || null;
+      const el = $(nameId), r = row();
+      if ($(clearId)) $(clearId).classList.toggle("hidden", !pakai.length);
+      if (!pakai.length) {
+        el.textContent = "Belum dipilih";
+        r.classList.remove("has");
+      } else {
+        const total = pakai.reduce((a, f) => a + f.size, 0);
+        el.textContent = pakai.length === 1
+          ? `${pakai[0].name} · ${fmtSize(total)}`
+          : `${pakai.length} file · ${fmtSize(total)} — ${pakai.map((f) => f.name).join(", ")}`;
+        r.classList.add("has");
+      }
+      if (kosong && kosong.length) {
+        showError(new Error(`${kosong.length} file terbaca 0 byte dan dilewati: `
+          + `${kosong.map((f) => f.name).join(", ")}. Download dulu ke perangkat ini.`));
+      } else if (pakai.length) {
+        clearError();
+      }
+      toggleProcess();
+    }
+
     $(inputId).addEventListener("change", (e) => {
       const semua = [...e.target.files];
       const kosong = semua.filter((f) => f.size === 0);
       const pakai = semua.filter((f) => f.size > 0);
-      state[stateKey + "s"] = pakai;
-      state[stateKey] = pakai[0] || null;
-      const row = $(rowId);
-      if (!semua.length) {
-        $(nameId).textContent = "Belum dipilih";
-        row.classList.remove("has");
-      } else if (!pakai.length) {
+      if (!semua.length) return;          // dialog ditutup tanpa memilih apa pun
+      if (!pakai.length) {
         // Umum di Android: file Google Drive yang belum diunduh terbaca 0 byte.
         $(nameId).textContent = `${semua[0].name} — kosong (0 byte), download dulu ke HP`;
-        row.classList.remove("has");
+        row().classList.remove("has");
         showError(new Error(`"${semua[0].name}" terbaca 0 byte.`));
-      } else {
-        const total = pakai.reduce((a, f) => a + f.size, 0);
-        $(nameId).textContent = pakai.length === 1
-          ? `${pakai[0].name} · ${fmtSize(total)}`
-          : `${pakai.length} file · ${fmtSize(total)} — ${pakai.map((f) => f.name).join(", ")}`;
-        row.classList.add("has");
-        clearError();
-        if (kosong.length) {
-          showError(new Error(`${kosong.length} file terbaca 0 byte dan dilewati: `
-            + `${kosong.map((f) => f.name).join(", ")}. Download dulu ke perangkat ini.`));
-        }
+        return;
       }
-      toggleProcess();
+      // DITAMBAHKAN, bukan menimpa. Banyak file picker di HP cuma memperbolehkan
+      // satu file per kali, jadi cara wajar menaruh empat cabang adalah menekan
+      // "Pilih" empat kali — dan kalau tiap penekanan menimpa yang sebelumnya,
+      // yang terjadi diam-diam: tiga cabang hilang, tanpa pesan apa pun, dan
+      // angkanya cuma terlihat lebih kecil daripada seharusnya.
+      const ada = state[stateKey + "s"] || [];
+      const kunci = (f) => `${f.name}|${f.size}|${f.lastModified}`;
+      const punya = new Set(ada.map(kunci));
+      state[stateKey + "s"] = ada.concat(pakai.filter((f) => !punya.has(kunci(f))));
+      segarkan(kosong);
     });
+
+    // Tanpa ini salah pilih tidak bisa dibatalkan — satu-satunya jalan keluar
+    // Reset, yang ikut membuang tiga slot lainnya.
+    if ($(clearId)) {
+      $(clearId).addEventListener("click", (e) => {
+        // Tombolnya di dalam <label>, jadi kliknya akan membuka dialog file
+        // kalau tidak dihentikan di sini.
+        e.preventDefault();
+        e.stopPropagation();
+        state[stateKey + "s"] = [];
+        $(inputId).value = "";
+        clearError();
+        segarkan();
+      });
+    }
   }
 
   const daftarFile = (kunci) => state[kunci + "s"] || (state[kunci] ? [state[kunci]] : []);
@@ -1110,10 +1146,10 @@
     for (const f of files) keluar.push(parser(await readWorkbook(f), f));
     return keluar;
   }
-  wireFile("ediFile", "ediFile", "ediName", "rowEdi");
-  wireFile("hhtFile", "hhtFile", "hhtName", "rowHht");
-  wireFile("dmpFile", "dmpFile", "dmpName", "rowDmp");
-  wireFile("lbpFile", "lbpFile", "lbpName", "rowLbp");
+  wireFile("ediFile", "ediFile", "ediName", "rowEdi", "ediClear");
+  wireFile("hhtFile", "hhtFile", "hhtName", "rowHht", "hhtClear");
+  wireFile("dmpFile", "dmpFile", "dmpName", "rowDmp", "dmpClear");
+  wireFile("lbpFile", "lbpFile", "lbpName", "rowLbp", "lbpClear");
 
   $("resetBtn").addEventListener("click", () => {
     state.ediFile = null; state.hhtFile = null; state.dmpFile = null; state.lbpFile = null;
@@ -1123,6 +1159,8 @@
     $("ediFile").value = ""; $("hhtFile").value = ""; $("dmpFile").value = ""; $("lbpFile").value = "";
     $("ediName").textContent = "Belum dipilih"; $("hhtName").textContent = "Belum dipilih";
     $("dmpName").textContent = "Belum dipilih"; $("lbpName").textContent = "Belum dipilih";
+    ["ediClear", "hhtClear", "dmpClear", "lbpClear"]
+      .forEach((id) => { if ($(id)) $(id).classList.add("hidden"); });
     ["rowEdi", "rowHht", "rowDmp", "rowLbp"].forEach((id) => $(id).classList.remove("has"));
     if (window.M3D2) window.M3D2.reset();
     state.titikByOutlet = new Map();
