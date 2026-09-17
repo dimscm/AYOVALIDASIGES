@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>M3 Beverage Mayora</title>
-  <link rel="stylesheet" href="styles.css?v=71" />
+  <link rel="stylesheet" href="styles.css?v=72" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23c8102e'/%3E%3Ctext x='50' y='62' font-size='34' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EM3%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -137,9 +137,8 @@
               tabel dan di Excel; yang disaring di sini daftar kerjanya, bukan datanya.
               <b>Daftar outletnya diambil dari DMP</b> — outlet masuk ke halaman salesman yang
               memegangnya di master, bukan ke salesman yang kebetulan absen di situ. Kalau yang
-              absen ternyata orang lain, itu ditulis di bawah nama tokonya ("dikunjungi ...") dan
-              sekalian jadi salah satu pertanyaan — biasanya tandanya outlet sudah pindah tangan
-              tapi DMP belum diperbarui. Outlet yang di DMP terdaftar di lebih dari satu salesman
+              outletnya dulu dipegang orang lain, namanya ditulis di bawah nama tokonya
+              ("sebelumnya ...") lengkap dengan cycle nyatanya waktu itu. Outlet yang di DMP terdaftar di lebih dari satu salesman
               dicetak di pemilik utamanya saja, dengan catatan "juga terdaftar di ...", supaya
               tidak tercetak dua kali. <b>Saringan salesman dan rayon memilih OUTLET, bukan
               kunjungan</b>, dan yang diuji pemiliknya menurut DMP. Jadi tabel, Excel, dan lembar
@@ -371,6 +370,30 @@
               <i>mutu pencatatan kunjungan</i>, bukan penjualan: outlet yang barcodenya memang belum
               terpasang akan menurunkan nilai salesmannya tanpa itu salahnya, jadi baca bersama
               kolom <b>Barcode</b>.</p>
+            <p class="hnote"><b>Kepemilikan outlet tidak ditanyakan di lembar cetak.</b> DMP yang
+              diupload adalah master hari ini, jadi <i>"outlet ini masih milik Anda?"</i> bukan
+              pertanyaan &mdash; jawabannya sudah ada di file yang baru saja dibaca, dan pertanyaan
+              yang jawabannya sudah kita punya cuma memakan baris. Yang benar-benar tidak kita punya
+              adalah cerita di balik outletnya, dan itu ada pada orang yang dulu memegangnya. Jadi
+              yang tercetak: <b>"Kalau ada kendala di outlet ini, tanya SI ANU &mdash; dia yang
+              memegang sebelumnya, tiap 7 hari, sampai 12/08/2026."</b>
+              Siapa yang disebut "sebelumnya" ditentukan <b>tanggal</b>, bukan tebakan: kunjungan
+              terakhirnya berhenti sebelum pemilik sekarang mulai. Yang waktunya masih beririsan
+              bukan salesman lama &mdash; itu dua orang yang sama-sama mengerjakan outletnya, dan
+              kalimatnya berbeda: <i>"juga diabsen ... pada periode yang sama, pastikan pembagian
+              kunjungannya."</i></p>
+            <p class="hnote"><b>Cycle ikut tercetak dan ikut ke Excel.</b> Di bawah nama toko pada
+              lembar cetak tertulis <b>"Cycle DMP: Weekly (7 hari) &middot; Anda tiap 21 hari
+              (5 kunjungan)"</b> &mdash; yang seharusnya dibanding yang benar-benar terjadi. Kalau
+              outletnya pernah dioper, cycle pemilik lamanya ikut ditulis, jadi kelihatan apakah
+              jaraknya memang melebar sejak berpindah tangan atau memang sudah begitu dari dulu.
+              Di Excel keempat sheet dapat kolom yang sama: <b>Salesman Sebelumnya</b>,
+              <b>Kunjungan Tiap (hari) &mdash; Sekarang</b>,
+              <b>Kunjungan Tiap (hari) &mdash; Sebelumnya</b>, dan
+              <b>Kunjungan Terakhir Sebelumnya</b>. Angkanya dihitung per salesman, bukan
+              digabung: outlet yang dulu didatangi tiap minggu lalu jadi tiap tiga minggu sejak
+              dioper akan terbaca "tiap 12 hari" kalau dua riwayatnya dirata-rata jadi satu &mdash;
+              dan justru pelebarannya itu yang perlu dilihat.</p>
             <p class="hnote"><b>Cycle kunjungan.</b> DMP menyebutkan outlet ini semestinya dikunjungi
               tiap berapa lama (Weekly, Be Weekly, Monthly). Di Excel ditambahkan tiga kolom yang
               membandingkannya dengan kenyataan: <b>Kunjungan Tiap (hari)</b> &mdash; jarak rata-rata
@@ -715,7 +738,7 @@
       </section>
     </div>
 
-    <p class="credit">dimscm &middot; v71</p>
+    <p class="credit">dimscm &middot; v72</p>
   </main>
 
   <!-- Lembar cetak per salesman. Disusun saat tombol Cetak ditekan, dan hanya
@@ -726,7 +749,7 @@
   <script src="vendor/jszip.min.js"></script>
   <script src="vendor/7zz.umd.js"></script>
   <script src="vendor/qrcode.js"></script>
-  <script src="app.js?v=71"></script>
-  <script src="dash2.js?v=71"></script>
+  <script src="app.js?v=72"></script>
+  <script src="dash2.js?v=72"></script>
 </body>
 </html>

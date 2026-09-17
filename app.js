@@ -1387,6 +1387,7 @@
       state.results = results;
       hitungGlobal();
       hitungFrekuensi();
+      hitungFrekuensiSls();
       hitungBarcode();
       hitungTitik();
 
@@ -2284,7 +2285,9 @@
     "Titik Toko", "Lat Usulan", "Long Usulan", "Keyakinan Usulan", "Catatan Usulan",
     "Total Kunjungan Outlet", "Total Di Luar Radius", "Salesman Pernah Berkunjung",
     "Branch", "Kode Branch",
-    "Kunjungan Tiap (hari)", "Cycle Seharusnya (hari)", "Selisih Cycle (hari)"];
+    "Kunjungan Tiap (hari)", "Cycle Seharusnya (hari)", "Selisih Cycle (hari)",
+    "Salesman Sebelumnya", "Kunjungan Tiap (hari) — Sekarang",
+    "Kunjungan Tiap (hari) — Sebelumnya", "Kunjungan Terakhir Sebelumnya"];
 
   const TITIK_TEKS = {
     USUL: "Perlu diperbaiki",
@@ -2339,6 +2342,7 @@
       r.branchEff ? namaBranch(r.branchEff) : "", r.branchEff || "",
       fr.hari ?? "", tgtCycle ?? "",
       (fr.hari !== null && fr.hari !== undefined && tgtCycle) ? fr.hari - tgtCycle : "",
+      ...Object.values(kolomCycleSls(r.custno)),
     ];
   }
 
@@ -2573,6 +2577,7 @@
         "Cycle Seharusnya (hari)": tgtCycle ?? "",
         "Selisih Cycle (hari)":
           (fr.hari !== null && fr.hari !== undefined && tgtCycle) ? fr.hari - tgtCycle : "",
+        ...kolomCycleSls(kode),
         "Alamat (DMP)": d.alamat || "",
         "Penugasan Lain": (d.alt || []).map((a) => `${a.s}${a.r ? ` (${a.r})` : ""}`).join("; "),
         Status: vs.length ? "Ada kunjungan" : "Belum pernah dikunjungi",
@@ -2669,6 +2674,8 @@
         "Salesman (DMP)": r.salesmanDmp || "",
         "Dikunjungi Oleh": r.salesmanEff,
         "Rayon (DMP)": r.rayonEff,
+        Cycle: r.cycleEff || "",
+        ...kolomCycleSls(r.custno),
         "Alamat (DMP)": r.alamatEff || "",
         "Kunjungan Discan": `${u.scan} dari ${u.n}`,
         "Jumlah Kunjungan": u.n,
@@ -2917,12 +2924,45 @@
       const adaBarcode = !!(bc && (bc.bucket === "BARU" || bc.bucket === "BELUM"));
       if (adaRadius) g.radius = (g.radius || 0) + 1;
       if (adaBarcode) g.barcode = (g.barcode || 0) + 1;
-      if (pengunjung.length) {
-        tanya.push(`Outlet ini dikunjungi <b class="berat">${escapeHtml(pengunjung.join(", "))}</b>`
-          + ` &mdash; masih milik Anda?`);
+      // Kepemilikan TIDAK ditanyakan lagi. DMP yang diupload adalah master hari
+      // ini, jadi "masih milik Anda?" bukan pertanyaan — jawabannya sudah ada di
+      // file yang baru saja dibaca, dan pertanyaan yang jawabannya sudah kita
+      // punya cuma memakan baris dan membuat lembarnya terasa tidak serius.
+      // Yang benar-benar tidak kita punya: cerita di balik outletnya. Itu ada
+      // pada orang yang dulu memegangnya.
+      const riwayat = riwayatPemilik(custno);
+      if (riwayat.sebelum) {
+        tanya.push(`Kalau ada kendala di outlet ini, tanya `
+          + `<b class="berat">${escapeHtml(riwayat.sebelum.sls)}</b> &mdash; dia yang memegang `
+          + `sebelumnya`
+          + (punyaCycle(riwayat.sebelum) ? ` (tiap ${riwayat.sebelum.hari} hari)` : "")
+          + `, sampai ${escapeHtml(tglTampil(riwayat.sebelum.akhir))}.`);
       }
+      // Cycle: yang tertulis di master vs yang benar-benar terjadi. Selisihnya
+      // sendiri temuan — bisa salesmannya yang jarang datang, bisa cycle di
+      // master yang memang sudah tidak cocok dengan tokonya.
+      const tgtCycle = cycleHari(d && d.cycle);
+      const cycleTeks = [
+        (d && d.cycle) ? `Cycle DMP: ${escapeHtml(d.cycle)}${tgtCycle ? ` (${tgtCycle} hari)` : ""}` : "",
+        riwayat.sekarang ? `Anda: ${teksFrek(riwayat.sekarang)}` : "",
+      ].filter(Boolean).join(" &middot; ");
       g.baris.push({ custno, nama: rows[0].namaTokoEff, alamat: rows[0].alamatEff,
-                     masalah, tanya, jawab, pengunjung, lain, tanpaPemilik: !pemilik });
+                     masalah, tanya, jawab, pengunjung, lain, tanpaPemilik: !pemilik,
+                     cycleTeks,
+                     sebelumTeks: riwayat.sebelum
+                       ? `sebelumnya ${escapeHtml(riwayat.sebelum.sls)} &mdash; `
+                         + `${teksFrek(riwayat.sebelum)}, s/d `
+                         + `${escapeHtml(tglTampil(riwayat.sebelum.akhir))}`
+                       : "",
+                     // Salesman lain yang mengabsen pada periode yang sama bukan
+                     // pertanyaan — pemiliknya sudah jelas di DMP, dan biasanya
+                     // itu memang saling cover. Ditulis sebagai keterangan saja;
+                     // kalau dijadikan pertanyaan, 288 dari 1.637 baris berisi
+                     // pertanyaan yang tidak perlu dijawab siapa pun.
+                     bersamaTeks: riwayat.bersama.length
+                       ? `juga diabsen `
+                         + escapeHtml(riwayat.bersama.map((x) => x.sls).join(", "))
+                       : "" });
     }
 
     const hariIni = new Date().toLocaleDateString("id-ID",
@@ -2953,8 +2993,9 @@
           + `<td><b>${escapeHtml(b.nama || "")}</b>`
           + (b.alamat ? `<span class="kecil">${escapeHtml(b.alamat)}</span>` : "")
           + (b.tanpaPemilik ? `<span class="kecil tanda">tidak ada pemiliknya di DMP</span>` : "")
-          + (b.pengunjung && b.pengunjung.length
-              ? `<span class="kecil tanda">dikunjungi ${escapeHtml(b.pengunjung.join(", "))}</span>` : "")
+          + (b.cycleTeks ? `<span class="kecil">${b.cycleTeks}</span>` : "")
+          + (b.sebelumTeks ? `<span class="kecil tanda">${b.sebelumTeks}</span>` : "")
+          + (b.bersamaTeks ? `<span class="kecil">${b.bersamaTeks}</span>` : "")
           + (b.lain && b.lain.length
               ? `<span class="kecil">juga terdaftar di ${escapeHtml(b.lain.join(", "))}</span>` : "")
           + `</td>`
@@ -3544,6 +3585,91 @@
   const frekOutlet = (custno) =>
     (state.frekByOutlet && state.frekByOutlet.get(custno)) || { hari: null, n: 0 };
 
+  // Frekuensi yang sama, tapi DIPECAH PER SALESMAN. Outlet berpindah tangan,
+  // dan angka gabungan menyembunyikan justru yang perlu dilihat: outlet yang
+  // dulu didatangi tiap minggu lalu jadi tiap tiga minggu sejak dioper terbaca
+  // "tiap 12 hari" kalau dua riwayatnya dirata-rata jadi satu.
+  function hitungFrekuensiSls() {
+    const per = new Map();               // custno -> Map(salesman -> Set(tanggal))
+    for (const r of state.results || []) {
+      const t = r.tglIso;
+      const sls = r.salesmanEff;
+      if (!t || !sls) continue;
+      let m = per.get(r.custno);
+      if (!m) { m = new Map(); per.set(r.custno, m); }
+      let set = m.get(sls);
+      if (!set) { set = new Set(); m.set(sls, set); }
+      set.add(t);
+    }
+    const info = new Map();
+    for (const [custno, m] of per) {
+      const daftar = [];
+      for (const [sls, set] of m) {
+        const tgl = [...set].sort();
+        const akhir = tgl[tgl.length - 1];
+        daftar.push({
+          sls, n: tgl.length, awal: tgl[0], akhir,
+          hari: tgl.length >= 2
+            ? Math.round((Date.parse(akhir) - Date.parse(tgl[0])) / 86400000 / (tgl.length - 1))
+            : null,
+        });
+      }
+      daftar.sort((a, b) => String(a.akhir).localeCompare(String(b.akhir)));
+      info.set(custno, daftar);
+    }
+    state.frekSlsByOutlet = info;
+  }
+
+  // Siapa yang memegang outlet ini sekarang, siapa sebelumnya, dan siapa yang
+  // mengerjakannya bersamaan. Yang menentukan "sekarang" tetap DMP — itu master
+  // yang diupload hari ini, jadi kepemilikannya tidak perlu ditanya lagi. Yang
+  // masih berguna ditanyakan: kalau ada kendala di outlet ini, siapa yang tahu
+  // ceritanya.
+  function riwayatPemilik(custno) {
+    const daftar = (state.frekSlsByOutlet && state.frekSlsByOutlet.get(custno)) || [];
+    const d = state.dmpIndex && state.dmpIndex.get(custno);
+    let pemilik = (d && d.salesman) || "";
+    let sekarang = pemilik ? daftar.find((x) => x.sls === pemilik) || null : null;
+    // Tanpa pemilik di DMP, yang paling akhir berkunjung dianggap yang sekarang
+    // — itu satu-satunya keterangan yang tersedia, dan lebih baik daripada
+    // menyebut semua orang "sebelumnya".
+    if (!pemilik && daftar.length) { sekarang = daftar[daftar.length - 1]; pemilik = sekarang.sls; }
+    const lain = daftar.filter((x) => x.sls !== pemilik);
+    // "Sebelumnya" ditentukan tanggal, bukan tebakan: kunjungan terakhirnya
+    // berhenti sebelum pemilik sekarang mulai. Yang masih beririsan waktunya
+    // bukan salesman lama — itu dua orang yang mengerjakan outlet yang sama.
+    const batas = sekarang ? sekarang.awal : "";
+    const sebelum = lain.filter((x) => batas && x.akhir < batas);
+    const bersama = lain.filter((x) => !batas || x.akhir >= batas);
+    return { pemilik, sekarang, sebelum: sebelum.length ? sebelum[sebelum.length - 1] : null,
+             semuaSebelum: sebelum, bersama };
+  }
+
+  // Tiga kolom yang menjawab "cycle-nya berubah tidak sejak dioper": berapa
+  // hari sekali outlet ini didatangi pemiliknya sekarang, berapa hari sekali
+  // dulu, dan siapa yang dulu itu. Bentuknya disamakan supaya ketiga sheet dan
+  // lembar cetak menyebut hal yang sama dengan kata yang sama.
+  function kolomCycleSls(custno) {
+    const r = riwayatPemilik(custno);
+    return {
+      "Salesman Sebelumnya": r.sebelum ? r.sebelum.sls : "",
+      "Kunjungan Tiap (hari) — Sekarang": r.sekarang && r.sekarang.hari !== null
+        ? r.sekarang.hari : "",
+      "Kunjungan Tiap (hari) — Sebelumnya": r.sebelum && r.sebelum.hari !== null
+        ? r.sebelum.hari : "",
+      "Kunjungan Terakhir Sebelumnya": r.sebelum ? tglTampil(r.sebelum.akhir) : "",
+    };
+  }
+
+  // "tiap 7 hari (5 kunjungan)" — dipakai di lembar cetak maupun di layar.
+  // Satu kunjungan tidak punya jarak, jadi cycle-nya memang belum ada. Ditulis
+  // apa adanya, bukan "tiap 0 hari": angka yang dikarang lebih berbahaya
+  // daripada keterangan bahwa datanya belum cukup.
+  const punyaCycle = (x) => !!x && x.hari !== null && x.hari !== undefined;
+  const teksFrek = (x) => !x ? ""
+    : punyaCycle(x) ? `tiap ${x.hari} hari (${x.n} kunjungan)`
+    : `${x.n} kunjungan, cycle belum terhitung`;
+
   // ---- Nama cabang ----
   // Yang dipakai sebagai identitas tetap KODEBRANCH: itu yang menempel di tiap
   // outlet dan tidak berubah. Yang ditampilkan namanya, karena "CNS JAKUTPUS"
@@ -4031,6 +4157,8 @@
       "Salesman (DMP)": r.salesmanDmp || "",
       "Dikunjungi Oleh": r.salesmanEff,
       "Rayon (DMP)": r.rayonEff,
+      Cycle: r.cycleEff || "",
+      ...kolomCycleSls(custno),
       "Alamat (DMP)": r.alamatEff || "",
       Keyakinan: u.yakin,
       Catatan: catatanUsulan(u),
