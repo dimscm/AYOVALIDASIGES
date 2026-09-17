@@ -318,6 +318,7 @@
           salesman: (d && d.salesman) || sls,
           rayon: (d && d.rayon) || "",
           branch: (d && d.branch) || "",
+          dibuat: (d && d.dibuat) || "",
           alt: (d && d.alt) || null,
           diDmp: true,
           dariDaftarDmp: true,   // masuk lewat daftar resmi salesman di DMP
@@ -344,6 +345,7 @@
         salesman,
         rayon: (d && d.rayon) || "",
         branch: (d && d.branch) || "",
+        dibuat: (d && d.dibuat) || "",
         alt: (d && d.alt) || null,
         diDmp: !!d,
       });
@@ -717,6 +719,11 @@
         Rayon: o.rayon,
         Branch: o.branch ? window.M3.namaBranch(o.branch) : "",
         "Kode Branch": o.branch || "",
+        // Outlet yang belum transaksi belum tentu terlewat — bisa jadi memang
+        // baru dibuat dan belum sempat didatangi siapa pun. Tanpa tanggalnya,
+        // dua hal yang berbeda jauh itu terbaca sama di daftar ini.
+        "Tanggal Dibuat": o.dibuat ? window.M3.tglTampil(o.dibuat) : "",
+        "Umur Outlet (hari)": window.M3.umurHari(o.dibuat),
         Status: o.groups.size ? "Ada transaksi" : "Belum transaksi apa pun",
         "Jumlah Produk Belum Dibeli": o.missing.length,
         "Produk Belum Dibeli": o.missing.join(", "),

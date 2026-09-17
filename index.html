@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>M3 Beverage Mayora</title>
-  <link rel="stylesheet" href="styles.css?v=72" />
+  <link rel="stylesheet" href="styles.css?v=73" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23c8102e'/%3E%3Ctext x='50' y='62' font-size='34' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EM3%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -180,6 +180,14 @@
               pada tiap outlet: berapa kali dikunjungi, berapa yang in radius, siapa yang berkunjung,
               masalah titik dan barcodenya, sampai kolom <b>Perlu Ditindaklanjuti</b> (Ya/Tidak).
               Outlet yang <b>belum pernah dikunjungi</b> tetap dapat barisnya dan ditaruh paling atas.
+              Di sebelahnya ada <b>Tanggal Dibuat</b>, <b>Umur Outlet (hari)</b>, dan
+              <b>Dibuat Setelah Data Mulai</b> (Ya/Tidak) &mdash; diambil dari kolom CREATIONDATE di
+              DMP. Tanpa itu, dua hal yang artinya berbeda jauh terbaca sama: outlet lama yang
+              memang terlewat, dan outlet yang baru dibuat minggu lalu sehingga wajar belum
+              didatangi siapa pun. Kalau kolomnya berbunyi <b>"Ya"</b>, outletnya belum ada
+              sepanjang periode yang sedang dilihat &mdash; riwayat kosongnya bukan temuan.
+              Kolom yang sama ada di file <b>Outlet Belum Transaksi</b> di Coverage Produk, karena
+              di situ pertanyaannya persis sama.
               Saring dulu rayon atau salesmannya — misalnya rayon R01, maka isinya seluruh outlet
               aktif R01, yang bermasalah maupun tidak.
               Sheet <b>Hasil</b> juga tidak lagi dipotong oleh dropdown jenis masalah maupun centang
@@ -738,7 +746,7 @@
       </section>
     </div>
 
-    <p class="credit">dimscm &middot; v72</p>
+    <p class="credit">dimscm &middot; v73</p>
   </main>
 
   <!-- Lembar cetak per salesman. Disusun saat tombol Cetak ditekan, dan hanya
@@ -749,7 +757,7 @@
   <script src="vendor/jszip.min.js"></script>
   <script src="vendor/7zz.umd.js"></script>
   <script src="vendor/qrcode.js"></script>
-  <script src="app.js?v=72"></script>
-  <script src="dash2.js?v=72"></script>
+  <script src="app.js?v=73"></script>
+  <script src="dash2.js?v=73"></script>
 </body>
 </html>

@@ -924,6 +924,11 @@
       .map((n) => cols.indexOf(n)).find((i) => i >= 0);
     const iSubdist = ["NAMASUBDIST", "SUBDIST", "NAMA SUBDIST"]
       .map((n) => cols.indexOf(n)).find((i) => i >= 0);
+    // Tanggal outlet dibuat. Menjawab pertanyaan yang tidak bisa dijawab data
+    // kunjungan: outlet yang belum pernah transaksi itu memang terlewat, atau
+    // memang baru dibuat minggu lalu dan belum sempat didatangi siapa pun.
+    const iDibuat = ["CREATIONDATE", "CREATION DATE", "TGLDIBUAT", "TANGGALDIBUAT"]
+      .map((n) => cols.indexOf(n)).find((i) => i >= 0);
     const iStatusReg = cols.indexOf("STATUSREGISTER");
     const cell = (row, i) => i >= 0 && row[i] != null ? String(row[i]).trim() : "";
     const idx = idxLama instanceof Map ? idxLama : new Map();
@@ -993,6 +998,9 @@
         cycle: cell(row, iCycle),
         branch: br,
         subdist: sub,
+        // Disimpan sebagai yyyy-mm-dd supaya bisa diurutkan dan dikurangkan;
+        // bentuk tampilnya diurus waktu ditulis ke Excel.
+        dibuat: iDibuat === undefined ? "" : tglIso(cell(row, iDibuat)),
         // Status hidup/mati disimpan per outlet, bukan cuma dihitung: daftar
         // "semua outlet" tidak boleh memuat 100rb outlet mati.
         aktif: isAktif,
@@ -1385,6 +1393,7 @@
         for (const v of visits) { v.consistency = key; v.visitCount = visits.length; }
       }
       state.results = results;
+      state.tglDataMulai = undefined;
       hitungGlobal();
       hitungFrekuensi();
       hitungFrekuensiSls();
@@ -2580,6 +2589,12 @@
         ...kolomCycleSls(kode),
         "Alamat (DMP)": d.alamat || "",
         "Penugasan Lain": (d.alt || []).map((a) => `${a.s}${a.r ? ` (${a.r})` : ""}`).join("; "),
+        // Ditaruh tepat sebelum Status: kalau statusnya "belum pernah
+        // dikunjungi", yang pertama perlu dilihat memang umurnya.
+        "Tanggal Dibuat": d.dibuat ? tglTampil(d.dibuat) : "",
+        "Umur Outlet (hari)": umurHari(d.dibuat),
+        "Dibuat Setelah Data Mulai": !d.dibuat || !tglDataMulai() ? ""
+          : d.dibuat > tglDataMulai() ? "Ya" : "Tidak",
         Status: vs.length ? "Ada kunjungan" : "Belum pernah dikunjungi",
         "Jumlah Kunjungan": vs.length,
         "Kunjungan In Radius": vs.length - luar,
@@ -3645,6 +3660,26 @@
              semuaSebelum: sebelum, bersama };
   }
 
+  // Umur outlet dalam hari, dihitung sampai hari ini. Dipakai untuk memisahkan
+  // "outlet ini terlewat" dari "outlet ini memang baru dibuat".
+  function umurHari(iso) {
+    if (!iso) return "";
+    const t = Date.parse(iso);
+    if (Number.isNaN(t)) return "";
+    return Math.max(0, Math.round((Date.now() - t) / 86400000));
+  }
+
+  // Tanggal kunjungan paling awal yang ada di data. Outlet yang dibuat setelah
+  // tanggal ini belum ada sepanjang periode yang sedang dilihat, jadi wajar
+  // kalau riwayatnya kosong — dan itu beda jauh artinya dengan outlet lama yang
+  // tidak pernah didatangi.
+  function tglDataMulai() {
+    if (state.tglDataMulai !== undefined) return state.tglDataMulai;
+    const semua = (state.results || []).map((r) => r.tglIso).filter(Boolean).sort();
+    state.tglDataMulai = semua[0] || "";
+    return state.tglDataMulai;
+  }
+
   // Tiga kolom yang menjawab "cycle-nya berubah tidak sejak dioper": berapa
   // hari sekali outlet ini didatangi pemiliknya sekarang, berapa hari sekali
   // dulu, dan siapa yang dulu itu. Bentuknya disamakan supaya ketiga sheet dan
@@ -4211,6 +4246,8 @@
     // sebutan yang sama persis.
     namaBranch,
     labelBranch,
+    umurHari,
+    tglTampil,
     // Kotak cari yang bisa memilih sekaligus semua yang cocok. Dipakai dua
     // dashboard supaya cara kerjanya sama di dua-duanya.
     wirePencarianSalesman,
