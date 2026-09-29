@@ -9,8 +9,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=74" />
-  <link rel="stylesheet" href="print.css?v=74" />
+  <link rel="stylesheet" href="styles.css?v=76" />
+  <link rel="stylesheet" href="print.css?v=76" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23c8102e'/%3E%3Ctext x='50' y='62' font-size='34' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EM3%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -139,6 +139,22 @@
               <span class="tag-cons cons-MIXED">Inkonsisten</span> kadang benar kadang salah &mdash; ini yang paling perlu ditanyakan ke salesman.</p>
 
             <p class="hnote"><b>Kolom Titik Toko</b> — kalau kunjungan berkali-kali jatuh jauh dari titik toko di master, kemungkinan titiknya yang salah, bukan salesmannya. Web ini mengusulkan titik baru dari kumpulan kunjungan yang paling padat. Klik koordinatnya untuk buka di peta sebelum mengubah master. Lencana keyakinan: <span class="tag-cons yakin-Tinggi">Tinggi</span> semua kunjungan sepakat &middot; <span class="tag-cons yakin-Sedang">Sedang</span> &middot; <span class="tag-cons yakin-Rendah">Rendah</span> bukti tipis, wajib cek peta dulu. Tanda <span class="kuat">2+ SLS</span> = lebih dari satu salesman absen di tempat yang sama, buktinya lebih kuat. Kalau tertulis <b>"Titik toko diubah — kembalikan yang lama"</b>, berarti titik lama dulu terbukti lolos validasi lalu diganti — tinggal salin balik koordinat lamanya.</p>
+            <p class="hnote"><b>Usulan titik tidak melihat ALOR REASON sama sekali.</b> Alasan apa
+              pun yang tertulis &mdash; toko tutup, tidak ada respon, omzet kecil &mdash; sama saja
+              perlakuannya. Yang menentukan cuma dua hal: ada koordinat kunjungannya, dan titik di
+              master memang salah atau belum diisi.
+              Outlet yang <b>baru sekali bermasalah</b> dan outlet yang <b>kunjungannya berpencar</b>
+              sekarang juga dapat dugaan titik, ditandai <span class="tag-cons yakin-Rendah">Rendah</span>
+              dan bertuliskan <i>"Cek dulu"</i> di Excel. Dasarnya memang tipis &mdash; satu kunjungan
+              tidak punya pembanding &mdash; tapi pembandingnya bukan data, melainkan salesman yang
+              pagi itu melihat petanya dan menjawab benar atau salah. Menahan koordinatnya berarti
+              dia disuruh menjawab tanpa ancer-ancer sama sekali.
+              Yang tetap <b>tidak</b> diusulkan: outlet yang titik masternya memang sudah benar, dan
+              outlet berpencar yang tidak punya satu pun kelompok kunjungan. Di lembar cetak, QR
+              bertuliskan <b>"titik usulan"</b> tetap hanya untuk usulan yang kuat &mdash; dugaan
+              dari satu kunjungan koordinatnya sama persis dengan posisi absen yang sudah tercetak
+              di bawahnya, jadi menamainya usulan di kertas cuma menambah klaim tanpa menambah
+              keterangan.</p>
 
             <p class="hnote"><b>Kolom Barcode</b> — dinilai dari kunjungan terakhir ke toko itu:
               <span class="tag tag-bc-LANCAR">Lancar</span> tidak pernah gagal &middot;
@@ -474,7 +490,7 @@
       </section>
     </div>
 
-    <p class="credit">dimscm &middot; v75</p>
+    <p class="credit">dimscm &middot; v76</p>
   </main>
 
   <!-- Lembar cetak per salesman. Disusun saat tombol Cetak ditekan, dan hanya
@@ -485,7 +501,7 @@
   <script src="vendor/jszip.min.js"></script>
   <script src="vendor/7zz.umd.js"></script>
   <script src="vendor/qrcode.js"></script>
-  <script src="app.js?v=73"></script>
-  <script src="dash2.js?v=73"></script>
+  <script src="app.js?v=76"></script>
+  <script src="dash2.js?v=76"></script>
 </body>
 </html>
