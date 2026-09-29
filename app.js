@@ -3995,6 +3995,8 @@
       const ref = vs[0].r;
       const set = angka(ref.setting) || RADIUS_DEFAULT;
       const pernahLolos = semua.some((v) => v.r.flagRadius === "1");
+      // Diisi kalau outletnya dulu pernah lolos di titik master yang sekarang.
+      let lolosDulu = false, tglLolosDulu = "";
 
       // Pernah ada kunjungan yang lolos radius di outlet ini — kapan pun, tidak
       // harus di dalam rentang. Dua kemungkinan yang harus dibedakan:
@@ -4014,21 +4016,33 @@
                              bisaLolos: lama.bisaLolos, yakin: "Tinggi" });
           jml.kembali++;
           jml.dampak += lama.bisaLolos;
-        } else {
-          // Titik yang dipakai waktu kunjungan bermasalah itu ternyata sudah
-          // diganti. Artinya masalahnya sudah selesai dengan sendirinya — ini
-          // yang membedakan "masih salah" dari "dulu salah, sekarang beres".
-          const kini = titikAkhir(semua);
-          const sudahDiperbaiki = !!kini && vs.some((v) => {
-            const a = angka(v.r.latVal), b = angka(v.r.longVal);
-            return !titikKosong(a, b) && meter(a, b, kini.la, kini.lo) > set;
-          });
-          info.set(custno, { bucket: "PAS", sebab: sudahDiperbaiki ? "diperbaiki" : "lolos",
-                             n: semua.length, masalah: vs.length,
-                             tglBaru: sudahDiperbaiki ? kini.tgl : "" });
-          jml.pas++;
+          continue;
         }
-        continue;
+        // Titik yang dipakai waktu kunjungan bermasalah itu ternyata sudah
+        // diganti. Artinya masalahnya sudah selesai dengan sendirinya — ini
+        // yang membedakan "masih salah" dari "dulu salah, sekarang beres".
+        const kini = titikAkhir(semua);
+        const sudahDiperbaiki = !!kini && vs.some((v) => {
+          const a = angka(v.r.latVal), b = angka(v.r.longVal);
+          return !titikKosong(a, b) && meter(a, b, kini.la, kini.lo) > set;
+        });
+        if (sudahDiperbaiki) {
+          info.set(custno, { bucket: "PAS", sebab: "diperbaiki", n: semua.length,
+                             masalah: vs.length, tglBaru: kini.tgl });
+          jml.pas++;
+          continue;
+        }
+        // Sampai di sini: titik masternya tidak berubah dan dulu pernah
+        // menghasilkan flag 1. Dulu ini langsung dinyatakan "titiknya sudah
+        // benar, yang menyimpang kunjungannya" dan berhenti — tanpa usulan apa
+        // pun. Itu menelan banyak outlet yang flag-nya 0 sekarang: outlet bisa
+        // PINDAH, dan titik yang dulu benar jadi tidak benar lagi. Jadi
+        // diteruskan ke jalur biasa; kalau kunjungan bermasalahnya ternyata
+        // mengumpul jauh dari titik master, itu tetap diusulkan — hanya
+        // keyakinannya ditahan, karena titik lamanya memang pernah terbukti.
+        lolosDulu = true;
+        tglLolosDulu = semua.reduce((t, v) => v.r.flagRadius === "1"
+          && String(v.r.tglIso || "") > t ? String(v.r.tglIso || "") : t, "");
       }
 
       // Titik usulan diambil dari kelompok terpadat, bukan dari semua kunjungan.
@@ -4069,7 +4083,7 @@
                            ...(salahSekarang
                                  ? { mLat, mLon, curLa, curLo, belumTag, geser, set, rapat, bagian,
                                      sebar, salesmanBeda, hariBeda, bisaLolos: rapat,
-                                     yakin: "Rendah", lemah: "satu" }
+                                     yakin: "Rendah", lemah: "satu", lolosDulu, tglLolosDulu }
                                  : {}) });
         jml.satu++;
         if (salahSekarang) jml.dampak += rapat;
@@ -4092,14 +4106,16 @@
                            curLa, curLo, belumTag, salesmanBeda,
                            ...(bisaTawar
                                  ? { mLat, mLon, geser, set, rapat, bagian, hariBeda,
-                                     bisaLolos: rapat, yakin: "Rendah", lemah: "berpencar" }
+                                     bisaLolos: rapat, yakin: "Rendah", lemah: "berpencar",
+                                     lolosDulu, tglLolosDulu }
                                  : {}) });
         jml.tanya++;
         if (bisaTawar) jml.dampak += rapat;
       } else if (!salahSekarang) {
         // Kunjungan mengumpul tepat di titik master: titiknya sudah benar,
         // yang di luar radius itu kunjungan yang memang menyimpang.
-        info.set(custno, { bucket: "PAS", sebab: "pas", n: vs.length, geser, curLa, curLo });
+        info.set(custno, { bucket: "PAS", sebab: lolosDulu ? "lolos" : "pas",
+                           n: vs.length, geser, curLa, curLo });
         jml.pas++;
       } else {
         const bisaLolos = jarak.filter((d) => d <= set).length;
@@ -4110,9 +4126,25 @@
         let yakin = "Rendah";
         if (rapat === vs.length && (vs.length >= 3 || salesmanBeda > 1)) yakin = "Tinggi";
         else if (bagian >= 0.6) yakin = "Sedang";
+        // Titik master yang dulu pernah menghasilkan flag 1 tidak boleh
+        // digeser atas dasar sebaran saja — sistem sendiri sudah pernah
+        // menyatakannya benar. Usulannya tetap diberikan, tapi keyakinannya
+        // ditahan: paling tinggi "Sedang", dan itu pun hanya kalau urutan
+        // tanggalnya memang seperti outlet yang pindah — semua kunjungan yang
+        // dulu lolos terjadi SEBELUM kunjungan bermasalahnya dimulai. Kalau
+        // lolos dan bermasalahnya berselang-seling, itu lebih mirip absen yang
+        // tidak menentu daripada toko yang berpindah.
+        if (lolosDulu) {
+          const mulaiMasalah = vs.reduce((t, v) => {
+            const x = String(v.r.tglIso || "");
+            return x && (!t || x < t) ? x : t;
+          }, "");
+          const pindah = !!tglLolosDulu && !!mulaiMasalah && tglLolosDulu < mulaiMasalah;
+          yakin = pindah && yakin !== "Rendah" ? "Sedang" : "Rendah";
+        }
         info.set(custno, { bucket: "USUL", n: vs.length, rapat, sebar, mLat, mLon,
                            curLa, curLo, belumTag, geser, set, salesmanBeda, hariBeda,
-                           bisaLolos, yakin, bagian });
+                           bisaLolos, yakin, bagian, lolosDulu, tglLolosDulu });
         jml.usul++;
       }
     }
@@ -4169,6 +4201,10 @@
   function catatanUsulan(u) {
     if (!u) return "";
     if (u.bucket === "KEMBALI") return "Kembalikan titik lama";
+    // Titik master yang dulu pernah lolos lalu sekarang flag 0 biasanya berarti
+    // satu dari dua hal: tokonya pindah, atau salesmannya absen di tempat lain.
+    // Dua-duanya perlu dipastikan di lapangan sebelum master diubah.
+    if (u.lolosDulu) return "Dulu pernah lolos di titik ini — pastikan tokonya pindah";
     if (u.bucket === "SATU") return "Baru 1 kunjungan — wajib dicek di lapangan";
     if (u.bucket === "TANYA") return "Kunjungan berpencar — wajib dicek di lapangan";
     if (u.bucket !== "USUL") return "";
@@ -4249,7 +4285,13 @@
       + `<span class="titik-sub">`
       + (u.belumTag ? "titik toko belum diisi" : `meleset ${jarakTeks(u.geser)}`)
       + ` &middot; ${u.rapat} dari ${u.n} kunjungan (${Math.round((u.bagian || 0) * 100)}%)`
-      + ` mengumpul di titik ini<br>`
+      + ` mengumpul di titik ini`
+      + (u.lolosDulu
+           ? `<br>titik master sekarang pernah lolos`
+             + `${u.tglLolosDulu ? ` ${tglTampil(u.tglLolosDulu)}` : ""}`
+             + ` — pastikan tokonya memang pindah`
+           : "")
+      + `<br>`
       + petaLink(u.mLat, u.mLon, `${u.mLat.toFixed(6)}, ${u.mLon.toFixed(6)}`)
       + `</span>`
       + riwayatSub(r.custno, u.n);
@@ -4288,7 +4330,10 @@
         ? `FLAG 1 pada ${tglTampil(u.tglLolos)}`
         : `${u.rapat} dari ${u.n} (${Math.round((u.bagian || 0) * 100)}%)`
           + (u.lemah === "satu" ? " — baru 1 kunjungan, belum ada pembanding"
-             : u.lemah === "berpencar" ? ` — kunjungan berpencar, sebaran ${u.sebar} m` : ""),
+             : u.lemah === "berpencar" ? ` — kunjungan berpencar, sebaran ${u.sebar} m` : "")
+          + (u.lolosDulu
+               ? ` — titik master ini pernah lolos${u.tglLolosDulu ? ` ${tglTampil(u.tglLolosDulu)}` : ""}`
+               : ""),
       // Angka di "Dasar Usulan" hanya menghitung kunjungan BERMASALAH yang
       // dipakai menghitung titiknya. Riwayat utuh outlet ditaruh di kolom
       // sendiri supaya tidak tertukar: ini seluruh kunjungan ke outlet itu,

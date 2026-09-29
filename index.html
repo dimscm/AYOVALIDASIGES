@@ -9,8 +9,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=76" />
-  <link rel="stylesheet" href="print.css?v=76" />
+  <link rel="stylesheet" href="styles.css?v=77" />
+  <link rel="stylesheet" href="print.css?v=77" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23c8102e'/%3E%3Ctext x='50' y='62' font-size='34' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EM3%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -155,6 +155,23 @@
               dari satu kunjungan koordinatnya sama persis dengan posisi absen yang sudah tercetak
               di bawahnya, jadi menamainya usulan di kertas cuma menambah klaim tanpa menambah
               keterangan.</p>
+            <p class="hnote"><b>Outlet yang dulu pernah lolos pun sekarang bisa dapat usulan.</b>
+              Dulu, begitu sebuah outlet pernah menghasilkan FLAG 1 di titik master yang sekarang,
+              web ini langsung menyatakan <i>"titiknya sudah benar, yang menyimpang kunjungannya"</i>
+              dan berhenti &mdash; tanpa usulan apa pun. Itu menelan banyak outlet yang flag-nya 0
+              sekarang, padahal <b>toko bisa pindah</b>, dan titik yang dulu benar jadi tidak benar
+              lagi. Sekarang kalau kunjungan bermasalahnya ternyata mengumpul jauh dari titik
+              master, usulannya tetap keluar.
+              Keyakinannya ditahan, karena sistem sendiri dulu sudah pernah menyatakan titik itu
+              lolos: paling tinggi <span class="tag-cons yakin-Sedang">Sedang</span>, dan itu pun
+              hanya kalau urutan tanggalnya memang seperti toko yang pindah &mdash; semua kunjungan
+              yang dulu lolos terjadi <i>sebelum</i> kunjungan bermasalahnya dimulai. Kalau lolos
+              dan bermasalahnya berselang-seling, itu lebih mirip absen yang tidak menentu daripada
+              toko yang berpindah, jadi turun ke <span class="tag-cons yakin-Rendah">Rendah</span>.
+              Barisnya bertuliskan <b>"Dulu pernah lolos di titik ini &mdash; pastikan tokonya
+              pindah"</b>, lengkap dengan tanggal terakhir titik itu lolos.
+              Yang tetap dinyatakan benar: outlet yang kunjungan bermasalahnya <b>masih di sekitar
+              titik master</b>. Di situ yang menyimpang memang kunjungannya, bukan titiknya.</p>
 
             <p class="hnote"><b>Kolom Barcode</b> — dinilai dari kunjungan terakhir ke toko itu:
               <span class="tag tag-bc-LANCAR">Lancar</span> tidak pernah gagal &middot;
@@ -490,7 +507,7 @@
       </section>
     </div>
 
-    <p class="credit">dimscm &middot; v76</p>
+    <p class="credit">dimscm &middot; v77</p>
   </main>
 
   <!-- Lembar cetak per salesman. Disusun saat tombol Cetak ditekan, dan hanya
@@ -501,7 +518,7 @@
   <script src="vendor/jszip.min.js"></script>
   <script src="vendor/7zz.umd.js"></script>
   <script src="vendor/qrcode.js"></script>
-  <script src="app.js?v=76"></script>
-  <script src="dash2.js?v=76"></script>
+  <script src="app.js?v=77"></script>
+  <script src="dash2.js?v=77"></script>
 </body>
 </html>
