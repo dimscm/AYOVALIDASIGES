@@ -9,8 +9,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=77" />
-  <link rel="stylesheet" href="print.css?v=77" />
+  <link rel="stylesheet" href="styles.css?v=78" />
+  <link rel="stylesheet" href="print.css?v=78" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23c8102e'/%3E%3Ctext x='50' y='62' font-size='34' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3EM3%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -172,6 +172,21 @@
               pindah"</b>, lengkap dengan tanggal terakhir titik itu lolos.
               Yang tetap dinyatakan benar: outlet yang kunjungan bermasalahnya <b>masih di sekitar
               titik master</b>. Di situ yang menyimpang memang kunjungannya, bukan titiknya.</p>
+            <p class="hnote"><b>"Geser titik sedikit"</b> &mdash; untuk titik yang sebenarnya
+              <i>hampir</i> benar: sebagian kunjungan lolos, sebagian gagal tipis di luar radius.
+              Web ini mencari titik yang membuat <b>lebih banyak kunjungan lolos tanpa mengorbankan
+              yang sudah lolos</b>, misalnya <i>"Geser 29 m: lolos 7 &rarr; 12 dari 13 kunjungan"</i>.
+              Batasnya sengaja ketat: geser paling jauh dua kali radius izin, dan paling banyak
+              seperlima kunjungan yang sekarang lolos boleh jadi di luar radius. Tanpa batas itu,
+              rumusnya akan memindahkan titik ke warung sebelah tempat salesman biasa absen, asal
+              di sana kunjungannya lebih banyak. Usulan ini juga keluar untuk outlet yang kunjungan
+              terakhirnya sudah lolos &mdash; tidak mengorbankan apa-apa, cuma menambah yang lolos
+              &mdash; dan itu ditulis di barisnya.
+              <b>Yang tetap tanpa usulan:</b> kunjungan yang benar-benar berpencar. Di data cabang
+              B120 (287 ribu kunjungan), jarak antar dua kunjungan gagal yang paling berdekatan
+              saja rata-rata di atas 1 km &mdash; itu bukan titik toko yang salah, tapi salesman
+              yang absen di tempat berbeda-beda, dan yang perlu ditanyakan orangnya, bukan
+              petanya.</p>
 
             <p class="hnote"><b>Kolom Barcode</b> — dinilai dari kunjungan terakhir ke toko itu:
               <span class="tag tag-bc-LANCAR">Lancar</span> tidak pernah gagal &middot;
@@ -292,6 +307,7 @@
             <option value="">Semua outlet</option>
             <option value="KEMBALI">Titik toko diubah — kembalikan yang lama</option>
             <option value="USUL">Titik toko perlu diperbaiki</option>
+            <option value="GESER">Geser titik sedikit — lebih banyak lolos</option>
             <option value="TANYA">Kunjungan berpencar — tanya salesman</option>
             <option value="PAS">Titik toko sudah benar</option>
             <option value="SATU">Baru 1 kunjungan bermasalah</option>
@@ -507,7 +523,7 @@
       </section>
     </div>
 
-    <p class="credit">dimscm &middot; v77</p>
+    <p class="credit">dimscm &middot; v78</p>
   </main>
 
   <!-- Lembar cetak per salesman. Disusun saat tombol Cetak ditekan, dan hanya
@@ -518,7 +534,7 @@
   <script src="vendor/jszip.min.js"></script>
   <script src="vendor/7zz.umd.js"></script>
   <script src="vendor/qrcode.js"></script>
-  <script src="app.js?v=77"></script>
-  <script src="dash2.js?v=77"></script>
+  <script src="app.js?v=78"></script>
+  <script src="dash2.js?v=78"></script>
 </body>
 </html>

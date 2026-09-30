@@ -2309,6 +2309,8 @@
   // Kalimat untuk kolom "Titik Toko" di Excel. Kalau outletnya punya dugaan
   // titik walau lemah, itu disebut — supaya barisnya tidak terbaca "tidak ada
   // apa-apa" padahal koordinatnya ada di kolom sebelahnya.
+  TITIK_TEKS.GESER = "Geser sedikit — supaya lebih banyak lolos";
+
   const TITIK_TEKS_LEMAH = {
     TANYA: "Kunjungan berpencar — ada dugaan titik, cek di lapangan",
     SATU: "Baru 1 kunjungan — ada dugaan titik, cek di lapangan",
@@ -3480,6 +3482,61 @@
     return null;
   }
 
+  // Titik yang membuat LEBIH BANYAK kunjungan lolos tanpa mengorbankan yang
+  // sudah lolos. Ini menjawab kasus yang tidak tersentuh cara lain: titik
+  // master yang sebenarnya sudah hampir benar — sebagian kunjungan lolos,
+  // sebagian gagal tipis di luar radius — sehingga bukan "salah" dan bukan
+  // "benar". Digeser sedikit, dua-duanya lolos.
+  //
+  // Batasnya sengaja ketat, diukur di data 287 ribu kunjungan cabang B120:
+  //  - geser paling jauh 2x radius izin. Tanpa batas ini, di outlet yang
+  //    tidak punya kunjungan lolos sama sekali "titik terbaik"-nya cuma satu
+  //    kunjungan gagal acak yang jaraknya bisa berkilo-kilometer — 1.835
+  //    outlet seperti itu muncul waktu batasnya dicoba dilepas;
+  //  - harus ada kunjungan yang sekarang lolos, dan paling banyak seperlima
+  //    dari mereka boleh jadi gagal. Tanpa itu, rumus ini akan dengan senang
+  //    hati memindahkan titik ke warung sebelah tempat salesman biasa absen,
+  //    asal di sana kunjungannya lebih banyak.
+  function cariGeser(vs, M, set) {
+    const lolosDi = (la, lo) => {
+      const isi = new Set();
+      for (const v of vs) if (meter(v.la, v.lo, la, lo) <= set) isi.add(v);
+      return isi;
+    };
+    const kini = lolosDi(M.la, M.lo);
+    if (!kini.size) return null;
+    const batasHilang = Math.floor(kini.size * 0.2);
+    const kand = [];
+    for (const v of vs) {
+      const d = meter(v.la, v.lo, M.la, M.lo);
+      if (d <= 3 * set) kand.push({ la: v.la, lo: v.lo });
+      // Titik tengah antara master dan kunjungan gagal: sering justru di situ
+      // letak yang menangkap dua kelompok sekaligus.
+      if (v.r.flagRadius !== "1" && d <= 3 * set)
+        kand.push({ la: (v.la + M.la) / 2, lo: (v.lo + M.lo) / 2 });
+    }
+    let terbaik = null;
+    for (const k of kand) {
+      const isi = lolosDi(k.la, k.lo);
+      const arr = [...isi];
+      const h = { la: median(arr.map((v) => v.la)), lo: median(arr.map((v) => v.lo)) };
+      const isi2 = lolosDi(h.la, h.lo);
+      const c = isi2.size >= isi.size ? { la: h.la, lo: h.lo, isi: isi2 } : { la: k.la, lo: k.lo, isi };
+      const jauh = meter(c.la, c.lo, M.la, M.lo);
+      if (jauh < 10 || jauh > 2 * set) continue;
+      let hilang = 0;
+      for (const v of kini) if (!c.isi.has(v)) hilang++;
+      if (hilang > batasHilang) continue;
+      if (!terbaik || c.isi.size > terbaik.isi.size) terbaik = { ...c, jauh, hilang };
+    }
+    if (!terbaik) return null;
+    const tambah = terbaik.isi.size - kini.size;
+    if (tambah < 1) return null;
+    return { mLat: terbaik.la, mLon: terbaik.lo, geser: Math.round(terbaik.jauh),
+             kini: kini.size, jadi: terbaik.isi.size, tambah, hilang: terbaik.hilang,
+             total: vs.length };
+  }
+
   function titikTerbukti(semua, set) {
     // Kunjungan diurutkan menurut tanggal supaya "titik sekarang" benar-benar
     // yang terakhir dipakai, bukan yang kebetulan ada di baris pertama.
@@ -4149,6 +4206,41 @@
       }
     }
 
+    // Putaran kedua: outlet yang belum punya usulan apa pun dicoba dengan
+    // "geser sedikit". Sengaja dijalankan SETELAH semua kelompok lain
+    // ditentukan — ini pelengkap, bukan pengganti: usulan yang sudah ada dari
+    // cara lain tidak disentuh.
+    for (const [custno, semua] of perOutlet) {
+      const u0 = info.get(custno);
+      if (u0 && adaUsulanTitik(u0)) continue;
+      if (!semua.some((v) => v.r.flagRadius !== "1" && dalamRentang(v.r, rg))) continue;
+      const M = titikAkhir(semua);
+      if (!M) continue;
+      const set = angka((semua.find((v) => v.r.flagRadius !== "1") || semua[0]).r.setting)
+        || RADIUS_DEFAULT;
+      const g = cariGeser(semua, M, set);
+      if (!g) continue;
+      const bagian = g.jadi / g.total;
+      const yakin = bagian >= 0.9 && g.tambah >= 2 ? "Tinggi" : bagian >= 0.7 ? "Sedang" : "Rendah";
+      if (u0) {
+        if (u0.bucket === "PAS") jml.pas--;
+        else if (u0.bucket === "TANYA") jml.tanya--;
+        else if (u0.bucket === "SATU") jml.satu--;
+      }
+      info.set(custno, {
+        bucket: "GESER", n: g.total, mLat: g.mLat, mLon: g.mLon, curLa: M.la, curLo: M.lo,
+        belumTag: false, geser: g.geser, set, kiniLolos: g.kini, jadiLolos: g.jadi,
+        bisaLolos: g.tambah, hilang: g.hilang, bagian, yakin,
+        // Asal kelompoknya disimpan: "kunjungan terakhir sudah lolos" itu
+        // keterangan penting — tanpa itu usulan ini terbaca seolah outletnya
+        // sedang bermasalah.
+        asal: u0 ? u0.bucket + (u0.sebab ? "/" + u0.sebab : "") : "",
+        salesmanBeda: new Set(semua.map((v) => v.r.salesmanEff).filter(Boolean)).size,
+      });
+      jml.geser = (jml.geser || 0) + 1;
+      jml.dampak += g.tambah;
+    }
+
     state.titikByOutlet = info;
     state.titikStats = jml;
     labelTitikFilter();
@@ -4163,12 +4255,13 @@
       ? hitungKelompok(state.titikByOutlet, { abaikanTitik: true, tanpaFlag1: true })
       : {};
     const j = { kembali: k.KEMBALI || 0, usul: k.USUL || 0, tanya: k.TANYA || 0,
-                pas: k.PAS || 0, satu: k.SATU || 0 };
+                pas: k.PAS || 0, satu: k.SATU || 0, geser: k.GESER || 0 };
     const n = (x) => x.toLocaleString("id-ID");
     const teks = {
       "": "Semua outlet",
       KEMBALI: `Titik toko diubah — kembalikan yang lama (${n(j.kembali)})`,
       USUL: `Titik toko perlu diperbaiki (${n(j.usul)})`,
+      GESER: `Geser titik sedikit — lebih banyak lolos (${n(j.geser)})`,
       TANYA: `Kunjungan berpencar — tanya salesman (${n(j.tanya)})`,
       PAS: `Titik toko sudah benar (${n(j.pas)})`,
       SATU: `Baru 1 kunjungan bermasalah (${n(j.satu)})`,
@@ -4192,15 +4285,18 @@
   // koordinatnya berarti dia disuruh menjawab tanpa ancer-ancer.
   const adaUsulanTitik = (u) =>
     !!u && u.mLat !== null && u.mLat !== undefined && u.mLon !== null && u.mLon !== undefined
-    && (u.bucket === "USUL" || u.bucket === "KEMBALI" || u.bucket === "TANYA"
-        || u.bucket === "SATU");
+    && (u.bucket === "USUL" || u.bucket === "KEMBALI" || u.bucket === "GESER"
+        || u.bucket === "TANYA" || u.bucket === "SATU");
 
   // Urutan kekuatan bukti, dipakai mengurutkan sheet Usulan Titik.
-  const PERINGKAT_USUL = { KEMBALI: 0, USUL: 1, TANYA: 2, SATU: 3 };
+  // GESER di bawah USUL: buktinya kuat (kunjungan yang sudah lolos tetap
+  // lolos), tapi manfaatnya biasanya kecil — menambah satu-dua kunjungan.
+  const PERINGKAT_USUL = { KEMBALI: 0, USUL: 1, GESER: 2, TANYA: 3, SATU: 4 };
 
   function catatanUsulan(u) {
     if (!u) return "";
     if (u.bucket === "KEMBALI") return "Kembalikan titik lama";
+    if (u.bucket === "GESER") return "Geser sedikit — yang sudah lolos tetap lolos";
     // Titik master yang dulu pernah lolos lalu sekarang flag 0 biasanya berarti
     // satu dari dua hal: tokonya pindah, atau salesmannya absen di tempat lain.
     // Dua-duanya perlu dipastikan di lapangan sebelum master diubah.
@@ -4266,6 +4362,17 @@
         : `<span class="nil">Kunjungan berpencar ${jarakTeks(u.sebar)} — tanyakan ke salesman</span>`;
     const kuat = u.salesmanBeda > 1
       ? ` <span class="kuat" title="Dikunjungi lebih dari satu salesman yang berbeda — bukti lebih kuat">2+ SLS</span>` : "";
+    // Geser sedikit: titiknya hampir benar. Kalimatnya menyebut apa yang
+    // didapat dan apa yang tidak dikorbankan, dalam angka.
+    if (u.bucket === "GESER") {
+      return `<b class="titik-aksi">Geser titik toko ${jarakTeks(u.geser)}</b>`
+        + ` <span class="tag-cons yakin-${u.yakin}" title="${escapeHtml(TITIK_YAKIN[u.yakin])}">${u.yakin}</span>`
+        + `<span class="titik-sub">lolos ${u.kiniLolos} &rarr; ${u.jadiLolos} dari ${u.n} kunjungan`
+        + (u.hilang ? ` &middot; ${u.hilang} yang dulu lolos jadi di luar radius` : ` &middot; yang sudah lolos tetap lolos`)
+        + (u.asal === "PAS/beres" ? `<br>kunjungan terakhir sudah lolos &mdash; ini supaya yang lain ikut lolos` : "")
+        + `<br>` + petaLink(u.mLat, u.mLon, `${u.mLat.toFixed(6)}, ${u.mLon.toFixed(6)}`)
+        + `</span>` + riwayatSub(r.custno, u.n);
+    }
     // Mengembalikan koordinat yang dulu terbukti lolos berbeda sifatnya dari
     // menebak titik baru dari sebaran kunjungan, jadi kalimatnya pun berbeda.
     if (u.bucket === "KEMBALI") {
@@ -4304,6 +4411,7 @@
     USUL: "Ganti ke titik usulan",
     TANYA: "Cek dulu — kunjungan berpencar",
     SATU: "Cek dulu — baru 1 kunjungan",
+    GESER: "Geser sedikit — supaya lebih banyak kunjungan lolos",
   };
 
   function titikBarisExcel(custno, u, r) {
@@ -4328,6 +4436,10 @@
       Catatan: catatanUsulan(u),
       "Dasar Usulan": kembali
         ? `FLAG 1 pada ${tglTampil(u.tglLolos)}`
+        : u.bucket === "GESER"
+        ? `lolos ${u.kiniLolos} -> ${u.jadiLolos} dari ${u.n} kunjungan, digeser ${u.geser} m`
+          + (u.hilang ? ` (${u.hilang} yang dulu lolos jadi di luar radius)` : "")
+          + (u.asal === "PAS/beres" ? " — kunjungan terakhir sudah lolos" : "")
         : `${u.rapat} dari ${u.n} (${Math.round((u.bagian || 0) * 100)}%)`
           + (u.lemah === "satu" ? " — baru 1 kunjungan, belum ada pembanding"
              : u.lemah === "berpencar" ? ` — kunjungan berpencar, sebaran ${u.sebar} m` : "")
